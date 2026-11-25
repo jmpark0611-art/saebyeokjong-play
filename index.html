@@ -4334,7 +4334,7 @@ drawBattle=function(){
     const noLunge=isEcho||isUnname||isHush||isLong||isFare||isMist||isSwallow;
     if(hdReady) hdBlit("mons", name==="boss"?"boss":name, x+(pose==="attack"&&!noLunge?6:0), y, {w:dw, h:dh, alpha:e.hp<=0?0.3:1});
     else blit("mons", name, x, y, isEcho?100:isUnname?100:isHush?82:isSwallow?90:isMist?62:isFare?62:isLong?62:40, isEcho?147:isUnname?152:isHush?118:isSwallow?120:isMist?108:isFare?108:isLong?100:40);
-    e._rhyX=x+dw/2; e._rhyY=y+dh/2;
+    e._rhyX=x+dw/2; e._rhyY=y+dh/2; e._rhyTop=y; e._rhyW=dw; e._rhyH=dh;
     if(e===currentTarget&&activeEnemies.length>1) drawBattleTargetMarker(x,y,dw,dh);
     if(e.stun>0) drawBattleBadge("저림",x+dw/2,y-10,"#d8b0ff");
     if(e.poseT>0) e.poseT--;
@@ -7303,7 +7303,7 @@ window.__galmuriBlit=function(ctx,s,x,y,col,sz,al){
 
     // status
     win(boxX, statusY, boxW, statusH);
-    if(e0) hpRow(8, statusY+4, e0.name||"적", e0.hp, e0.maxHp, {right:92, marks:battleStatusMarks(e0)});
+    if(e0) hpRow(14, statusY+4, e0.name||"적", e0.hp, e0.maxHp, {right:92, marks:battleStatusMarks(e0)});
     else text("적", 8, statusY+4, COL.tx, 9);
     ctx.save();
     ctx.setTransform(1,0,0,1,0,0);
@@ -13722,6 +13722,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
   SPELLS.duet={id:"duet",name:"빛시위",mp:0,target:"enemy",pow:2.55,desc:"하늬와 솔이가 함께 울린다."};
   SPELLS.chorus={id:"chorus",name:"종울림",mp:0,target:"enemy",pow:1.85,desc:"하늬와 달개가 함께 울린다."};
   ENEMIES.echospawn={id:"echospawn",name:"남은여음",mon:"wisp",hp:10,atk:6,def:1,spd:9,xp:0,gold:0};
+  if(ENEMIES.wight) ENEMIES.wight.mon="longshade";
 
   const CHARGE=["moss","beetle","plaque","longshade","lastfare","hushbell","boss","swallowed"];
   const SHIELD=["moth","wisp","namemist","falseecho"];
@@ -13855,7 +13856,9 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     if(st.battle){ st.battle.syncG=0; st.battle._summoned=false; }
     allE().forEach(function(e){
       if(e.id!=="echospawn" && !e._hpScaled){
-        const mul=e.boss?1.85:2.8;
+        var mul=e.boss?2.45:2.8;
+        if(e.id==="moss"||e.id==="moth") mul=4.6;
+        if(st.easy) mul*=0.8;
         e.maxHp=Math.max(1,Math.round(e.maxHp*mul)); e.hp=e.maxHp; e._hpScaled=true;
       }
       e.phase2=false; e.barrier=false; e.intent=null; e.flashT=0; rollIntent(e);
@@ -14060,25 +14063,105 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
         ctx.restore();
       }
       if(e.barrier){
+        /* silhouette/radial glow only — never a rectangle */
+        const rw=Math.max(16,(e._rhyW||36)*0.62), rh=Math.max(18,(e._rhyH||36)*0.7);
         ctx.save(); ctx.globalCompositeOperation="lighter";
-        ctx.strokeStyle="rgba(140,210,255,0.7)"; ctx.lineWidth=1.2;
-        ctx.beginPath(); ctx.arc(x,y+4,18,0,Math.PI*2); ctx.stroke();
+        const grd=ctx.createRadialGradient(x,y,Math.max(2,rw*0.28),x,y,rw);
+        grd.addColorStop(0,"rgba(160,220,255,0.0)");
+        grd.addColorStop(0.55, less()?"rgba(140,210,255,0.22)":"rgba(140,210,255,0.40)");
+        grd.addColorStop(1,"rgba(140,210,255,0)");
+        ctx.fillStyle=grd;
+        ctx.beginPath(); ctx.ellipse(x,y,rw,rh,0,0,Math.PI*2); ctx.fill();
+        ctx.strokeStyle="rgba(180,230,255,0.55)"; ctx.lineWidth=1.1;
+        ctx.beginPath(); ctx.ellipse(x,y,rw*0.78,rh*0.78,0,0,Math.PI*2); ctx.stroke();
         ctx.restore();
       }
-      const lab=intentTxt(e);
-      if(lab && b.phase==="command"){
-        const tw=(typeof textWidth==="function"?textWidth(lab,9):lab.length*6);
-        if(typeof text==="function") text(lab, x, y-22, e.intent==="charge"?"#ffd080":"#d8c8f0", 9, "center");
-      }
     });
-    /* 맞소리 gauge — stage bottom-left, away from command box */
+    function pill(px,py,pw,ph,col){
+      const r=Math.min(4,ph/2,pw/2);
+      ctx.fillStyle=col;
+      ctx.beginPath();
+      if(ctx.roundRect) ctx.roundRect(px,py,pw,ph,r);
+      else {
+        ctx.moveTo(px+r,py);
+        ctx.arcTo(px+pw,py,px+pw,py+ph,r);
+        ctx.arcTo(px+pw,py+ph,px,py+ph,r);
+        ctx.arcTo(px,py+ph,px,py,r);
+        ctx.arcTo(px,py,px+pw,py,r);
+        ctx.closePath();
+      }
+      ctx.fill();
+    }
+    if(b.phase==="command"){
+      const margin=6, bh=12, stageH=118, stageW=(typeof W==="number"?W:192);
+      const boxes=[];
+      allE().forEach(function(e){
+        if(e.hp<=0) return;
+        const lab=intentTxt(e); if(!lab) return;
+        var raw=0;
+        try{ if(window.__RPG&&typeof window.__RPG.measurePx==="function") raw=window.__RPG.measurePx(lab,9); }catch(err){}
+        if(!(raw>0) && typeof textWidth==="function") raw=textWidth(lab,9);
+        if(!(raw>0)) raw=String(lab).length*10;
+        const tw=Math.ceil(raw)+10;
+        const cx=Number.isFinite(e._rhyX)?e._rhyX:40;
+        const top=Number.isFinite(e._rhyTop)?e._rhyTop:(Number.isFinite(e._rhyY)?e._rhyY-22:48);
+        let bx=Math.round(cx-tw/2), by=Math.round(top-bh-2);
+        if(bx<margin) bx=margin;
+        if(bx+tw>stageW-margin) bx=stageW-margin-tw;
+        if(by<margin) by=margin;
+        if(by+bh>stageH-16) by=stageH-16-bh;
+        boxes.push({e:e,lab:lab,tw:tw,bh:bh,bx:bx,by:by});
+      });
+      boxes.sort(function(a,b){ return a.bx-b.bx; });
+      for(let i=1;i<boxes.length;i++){
+        const prev=boxes[i-1], cur=boxes[i];
+        if(cur.bx<prev.bx+prev.tw+3 && Math.abs(cur.by-prev.by)<bh+2){
+          cur.bx=prev.bx+prev.tw+3;
+          if(cur.bx+cur.tw>stageW-margin){
+            cur.bx=stageW-margin-cur.tw;
+            prev.bx=Math.max(margin, cur.bx-prev.tw-3);
+          }
+        }
+      }
+      boxes.forEach(function(box){
+        pill(box.bx, box.by, box.tw, box.bh, "rgba(10,12,28,0.84)");
+        const col=box.e.intent==="charge"?"#ffd080":box.e.intent==="shield"?"#a8e0ff":box.e.intent==="summon"?"#e0c8ff":"#d8c8f0";
+        if(typeof text==="function") text(box.lab, box.bx+box.tw/2, box.by+1, col, 9, "center");
+      });
+    }
+    /* 맞소리 gauge — mid-bottom of the stage, not over commands */
     const g=b.syncG||0;
     if(st.party.length>1 && (canShine()||canBell()||g>0)){
-      const gx=6, gy=102, gw=54, gh=4;
-      if(typeof text==="function") text("맞소리", gx, gy-9, g>=80?"#ffe56a":"#d8c8a0", 8);
-      ctx.fillStyle="rgba(12,10,24,0.55)"; ctx.fillRect(gx-1,gy-1,gw+2,gh+2);
-      ctx.fillStyle="#2a2440"; ctx.fillRect(gx,gy,gw,gh);
-      ctx.fillStyle=g>=80?"#ffe56a":"#c9a24a"; ctx.fillRect(gx,gy,Math.max(0,gw*g/100),gh);
+      const lab="맞소리";
+      const lw=Math.ceil((typeof textWidth==="function"?textWidth(lab,9):28))+2;
+      const gw=70, gh=7, gap=4;
+      const pw=lw+gap+gw+8, ph=14;
+      const gx=58, gy=105;
+      const stageW=(typeof W==="number"?W:192);
+      const px=Math.max(4, Math.min(gx, stageW-4-pw));
+      pill(px, gy, pw, ph, "rgba(10,12,28,0.82)");
+      if(typeof text==="function") text(lab, px+4, gy+2, g>=80?"#ffe56a":"#e8d8b0", 9);
+      const bx=px+4+lw+gap, by=gy+3;
+      pill(bx, by, gw, gh, "#1a1630");
+      const fw=Math.max(0, Math.floor(gw*g/100));
+      if(fw>0){
+        ctx.save();
+        ctx.beginPath();
+        const r=Math.min(3,gh/2);
+        if(ctx.roundRect) ctx.roundRect(bx,by,fw,gh,r);
+        else { ctx.rect(bx,by,fw,gh); }
+        ctx.clip();
+        ctx.fillStyle=g>=80?"#ffe56a":"#c9a24a";
+        ctx.fill();
+        ctx.restore();
+        if(fw>=2){
+          ctx.fillStyle=g>=80?"#ffe56a":"#c9a24a";
+          ctx.beginPath();
+          if(ctx.roundRect) ctx.roundRect(bx,by,fw,gh,Math.min(3,gh/2));
+          else ctx.rect(bx,by,fw,gh);
+          ctx.fill();
+        }
+      }
     }
     /* extra note marks */
     if(RHY.notes){
