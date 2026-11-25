@@ -3352,26 +3352,32 @@ interact=function(){
   _interact();
 };
 
-/* ---- pixel fog strips (no round bokeh) ---- */
+/* ---- soft drifting mist wisps (no hard fillRect bands) ---- */
 function drawPixelFog(t, a){
   a=a==null?0.16:a;
   ctx.save();
-  ctx.imageSmoothingEnabled=false;
-  const bands=7;
-  for(let i=0;i<bands;i++){
-    const y=((i*19 + ((t*0.15)|0) + i*3) % (H+12)) - 4;
-    const h=2+(i%3);
-    const sl = (t*(0.18+i*0.07) + i*47);
-    ctx.fillStyle="rgba(210,198,230,"+(a*(0.35+0.25*(i%3)))+")";
-    for(let s=-1;s<6;s++){
-      const x=((sl + s*52 + (i%2)*11) % (W+48)) - 24;
-      const ww=28+((i*5+s*9)%18);
-      ctx.fillRect(x|0, y|0, ww, h);
-      // darker band just under, 1px, for crisp layers
-      ctx.fillStyle="rgba(160,150,190,"+(a*0.2)+")";
-      ctx.fillRect(x|0, (y|0)+h, ww-4, 1);
-      ctx.fillStyle="rgba(210,198,230,"+(a*(0.35+0.25*(i%3)))+")";
-    }
+  const wisps=11;
+  for(let i=0;i<wisps;i++){
+    const x=((t*(0.11+i*0.03)+i*67)%(W+90))-45;
+    const bob=Math.sin(t*0.012+i*1.7)*7+Math.sin(t*0.007+i*0.9)*4;
+    const y=28+((i*37+17)%Math.floor(H*0.68))+bob;
+    const rx=16+(i*11+7)%24;
+    const ry=4+(i*3+2)%7;
+    let al=a*(0.20+0.14*((i*2)%3))*(0.8+0.2*Math.sin(t*0.018+i*2.1));
+    // keep title/subtitle readable
+    if(y<52) al*=Math.max(0.2,(y-6)/46);
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.scale(1,ry/rx);
+    const g=ctx.createRadialGradient(0,0,0,0,0,rx);
+    g.addColorStop(0,"rgba(210,198,230,"+al+")");
+    g.addColorStop(0.42,"rgba(200,188,220,"+(al*0.42)+")");
+    g.addColorStop(1,"rgba(180,170,200,0)");
+    ctx.fillStyle=g;
+    ctx.beginPath();
+    ctx.arc(0,0,rx,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
   }
   ctx.restore();
 }
