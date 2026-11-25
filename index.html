@@ -790,7 +790,8 @@ function validSavedFlags(flags){
     "ch2","ch2end","ch2gate","ch2story","ch2boss","ch2intro",
     "ch3","ch3end","ch3intro","ch3story","ch3gate","ch3boss",
     "ch4","ch4end","ch4intro","ch4story","ch4gate","ch4boss",
-    "ch5","ch5end","ch5intro","ch5story","ch5gate","ch5boss","ch5epilogue","_ch5peak"];
+    "ch5","ch5end","ch5intro","ch5story","ch5gate","ch5boss","ch5epilogue","_ch5peak",
+    "sideName","sideNameDone","sideBell","sideBellDone","sideEcho","sideEchoDone","sideEnd","sideEndDone"];
   const keys=bools.concat(["chests","lamps","ch2bells","ch3names","ch4bells","ch5tabs","ch5choice"]);
   if(Object.keys(flags).some(k=>!keys.includes(k))) return false;
   if(bools.some(k=>Object.prototype.hasOwnProperty.call(flags,k) && typeof flags[k]!=="boolean")) return false;
@@ -3829,6 +3830,14 @@ function rhyConfirm(){
     const list=bagList().filter(x=>ITEMS[x.id]&&ITEMS[x.id].kind!=="key");
     if(!list.length){ toast("쓸 도구가 없다."); return; }
     b.sub="items"; b.itemList=list; b.itemIdx=0; b.msg="도구를 고르세요.";
+    return;
+  }
+  if(cmd==="여음"){
+    const enemy=battleAliveE()[0];
+    if(!enemy){ audio.sfx.cancel(); return; }
+    RHY.action="skill"; RHY.skill="echo"; RHY.enemy=enemy;
+    b.sub=""; b.msg="여음! 남은 소리에 맞춰 누르세요."; b.phase="beats";
+    rhyStartPhrase(ch,"echo",false);
     return;
   }
   const act=cmd==="기술"?"skill":cmd==="방어"?"defend":"attack";
@@ -13421,6 +13430,263 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
   console.log("[ch5 leftover] compact dialog + planted foes ready");
 })();
 
+
+
+
+/* ===== 골가지 이야기: side quests, 기록 menu ===== */
+(function(){
+  const SIDE_FLAGS=["sideName","sideNameDone","sideBell","sideBellDone","sideEcho","sideEchoDone","sideEnd","sideEndDone"];
+  function ensureSideFlags(){
+    const f=st.flags||{};
+    SIDE_FLAGS.forEach(function(k){ if(f[k]==null) f[k]=false; });
+    st.flags=f;
+  }
+  ensureSideFlags();
+
+  ITEMS.nameTag={id:"nameTag",name:"빈 이름패",desc:"이름을 삼킨 돌에서 받은 빈 패.",price:0,sell:0,kind:"key"};
+  ITEMS.bellCord={id:"bellCord",name:"종의 실",desc:"작은 종의 여음을 담은 실.",price:0,sell:0,kind:"key"};
+  ITEMS.endEmber={id:"endEmber",name:"남긴 불씨",desc:"등불지기가 맡긴 작은 불씨.",price:0,sell:0,kind:"key"};
+  SPELLS.echo={id:"echo",name:"여음",mp:0,target:"enemy",pow:1.55,desc:"남은 소리를 다시 부른다."};
+  BATTLE_CMD_HELP["여음"]=["남은 소리를 다시 부른다.","A 시작"];
+
+  function grantKey(id){
+    st.bag[id]=(st.bag[id]||0)+1;
+    const it=ITEMS[id];
+    if(it&&typeof toast==="function") toast((typeof josa==="function"?josa(it.name,"을","를"):it.name)+" 얻었다.");
+  }
+
+  const SIDE_QUESTS=[
+    {id:"name", title:"빈 이름", start:"sideName", done:"sideNameDone", need:function(){ return !!st.flags.ch3; }},
+    {id:"bell", title:"작은 종", start:"sideBell", done:"sideBellDone", need:function(){ return !!st.flags.ch2end; }},
+    {id:"echo", title:"그물의 여음", start:"sideEcho", done:"sideEchoDone", need:function(){ return !!(st.flags.ch2||st.flags.ch2end||st.flags.ch3); }},
+    {id:"end", title:"남긴 불씨", start:"sideEnd", done:"sideEndDone", need:function(){ return !!st.flags.ch5epilogue; }}
+  ];
+
+  function sideNotesList(){
+    const out=[];
+    SIDE_QUESTS.forEach(function(q){
+      if(st.flags[q.start]||st.flags[q.done]){
+        out.push({id:q.id, title:q.title, state:st.flags[q.done]?"남겼다":"듣는 중"});
+      }
+    });
+    return out;
+  }
+
+  function insertNotesOpt(menu){
+    if(!menu||!menu.opts) return;
+    const opts=menu.opts;
+    if(opts.indexOf("기록")>=0) return;
+    let at=opts.findIndex(function(o){ return String(o).indexOf("쉬운 모드")===0; });
+    if(at<0) at=opts.indexOf("닫기");
+    if(at<0) at=opts.length;
+    opts.splice(at,0,"기록");
+    if(menu.idx>=at) menu.idx++;
+  }
+
+  function notesRootIndex(){
+    const opts=(st.menu&&st.menu.opts)||[];
+    const i=opts.indexOf("기록");
+    return i>=0?i:0;
+  }
+
+  function openNotesMenu(){
+    const list=sideNotesList();
+    const opts=list.length?list.map(function(x){ return x.title+"  ·  "+x.state; }):["아직 적어 둔 이야기가 없다."];
+    st.mode="menu";
+    st.menu={kind:"notes", idx:0, opts:opts, list:list, backIdx:notesRootIndex()};
+    if(typeof audio!=="undefined"&&audio.sfx&&audio.sfx.menu) audio.sfx.menu();
+  }
+
+  const _snap=snapshot;
+  snapshot=function(){
+    const d=_snap();
+    d.flags=d.flags||{};
+    SIDE_FLAGS.forEach(function(k){ d.flags[k]=!!st.flags[k]; });
+    return d;
+  };
+  const _apply=applySnap;
+  applySnap=function(d){
+    _apply(d);
+    ensureSideFlags();
+    if(d&&d.flags){
+      SIDE_FLAGS.forEach(function(k){ if(d.flags[k]!=null) st.flags[k]=!!d.flags[k]; });
+    }
+  };
+  const _ensure=ensureFlags;
+  ensureFlags=function(){ _ensure(); ensureSideFlags(); };
+
+  const _bag=bagList;
+  bagList=function(){
+    const a=_bag();
+    ["nameTag","bellCord","endEmber"].forEach(function(id){
+      if((st.bag[id]||0)>0 && !a.some(function(x){ return x.id===id; })) a.push({id:id, n:st.bag[id]});
+    });
+    return a;
+  };
+
+  const _openFM=openFieldMenu;
+  openFieldMenu=function(){
+    _openFM();
+    if(st.menu&&st.menu.kind==="root") insertNotesOpt(st.menu);
+  };
+
+  const _um=updateMenu;
+  updateMenu=function(){
+    const m=st.menu;
+    if(m&&m.kind==="root"&&just.a&&m.opts&&m.opts[m.idx]==="기록"){
+      tapped("a");
+      openNotesMenu();
+      return;
+    }
+    _um();
+    if(st.menu&&st.menu.kind==="root") insertNotesOpt(st.menu);
+  };
+
+  const gold=function(){ return (typeof COL!=="undefined"&&COL.gold)||"#e8c86a"; };
+  const tx=function(){ return (typeof COL!=="undefined"&&COL.tx)||"#f4efe0"; };
+  const dim=function(){ return (typeof COL!=="undefined"&&COL.dim)||"#b8c0d4"; };
+
+  const _dm=drawMenu;
+  drawMenu=function(){
+    const m=st.menu;
+    if(m&&m.kind==="notes"){
+      const opts=m.opts||[];
+      const n=Math.max(1,opts.length);
+      win(12, 32, 168, 44+n*18);
+      text("골가지 이야기", 20, 38, gold(), 11);
+      opts.forEach(function(o,i){
+        const y=58+i*18;
+        if(i===m.idx && typeof highlightBar==="function") highlightBar(16,y-2,160,16);
+        text((i===m.idx?"▶ ":"  ")+o, 20, y, i===m.idx?gold():tx(), 11);
+      });
+      text("B 돌아가기", 20, 62+n*18, dim(), 9);
+      return;
+    }
+    _dm();
+  };
+
+  const _acc=accessibleMenuStatus;
+  accessibleMenuStatus=function(){
+    const m=st.menu;
+    if(m&&m.kind==="notes"){
+      const opts=m.opts||[];
+      const current=opts[m.idx]||"선택할 항목 없음";
+      return "기록, "+current+(opts.length?", "+(m.idx+1)+" / "+opts.length:"");
+    }
+    return _acc();
+  };
+
+  const _pat=rhyPattern;
+  rhyPattern=function(ch, action){
+    if(action==="echo") return st.easy?[0,1,2,3]:[0,1,2,2.75];
+    return _pat(ch, action);
+  };
+  const _cmds=rhyCmds;
+  rhyCmds=function(ch){
+    const a=_cmds(ch);
+    if(st.flags&&st.flags.sideEchoDone && a.indexOf("여음")<0){
+      const i=a.indexOf("기술");
+      a.splice(i>=0?i+1:1, 0, "여음");
+    }
+    return a;
+  };
+
+  const _talk=talkSpecial;
+  talkSpecial=function(kind){
+    ensureSideFlags();
+    if(kind==="stonekeeper"){
+      if(st.flags.ch3 && !st.flags.sideNameDone){
+        st.flags.sideName=true;
+        startDialog([
+          "돌지기: 이 돌은, 이름을 삼킨 채 남아 있소.",
+          "돌지기: 귀를 대 보면, 아주 짧은 숨만 남아 있소.",
+          "하늬: …누군가의 이름이, 여기 있었구나.",
+          "돌지기: 온전하지 않아도 되오. 한 번만 불러 주시오.",
+          "돌지기: 이 빈 이름패를 가져가시오. 길을 걸을 때 잊지 마시오."
+        ], function(){
+          st.flags.sideNameDone=true;
+          grantKey("nameTag");
+        });
+        return;
+      }
+      if(st.flags.sideNameDone){
+        startDialog(["돌지기: 빈 패를 아직 지니고 있구나. 그것으로 충분하오."]);
+        return;
+      }
+    }
+    if(kind==="shrine"){
+      if(st.flags.ch2end && !st.flags.sideBellDone){
+        st.flags.sideBell=true;
+        startDialog([
+          "종각지기: 잠깐, 그 전에 이 작은 종을 들어 보시오.",
+          "종각지기: 큰 종은 고요해도, 여기엔 여음이 남았소.",
+          "하늬: 멀리서 듣던 그 소리와, 닮아 있다.",
+          "종각지기: 작은 종이라도, 이름을 실어 나를 수 있소.",
+          "종각지기: 이 실을 허리에 두르시오. 박자가 흔들릴 때 힘이 되오."
+        ], function(){
+          st.flags.sideBellDone=true;
+          grantKey("bellCord");
+          startDialog(["종각지기: 지금까지의 길을 여기에 맡겨 두시겠소?"], function(){
+            st.mode="innAsk";
+            st.menu={kind:"saveAsk", idx:0, opts:["맡긴다","그만둔다"]};
+          });
+        });
+        return;
+      }
+    }
+    if(kind==="netkeeper"){
+      if((st.flags.ch2||st.flags.ch2end||st.flags.ch3) && !st.flags.sideEchoDone){
+        st.flags.sideEcho=true;
+        const lines=[
+          "그물지기: 그물에 고기가 아니라, 소리가 걸렸소.",
+          "그물지기: 만지면 여음만 남고, 형체는 없지."
+        ];
+        if(st.flags.soli) lines.push("솔이: 기분 나쁜 메아리 아냐? …아니, 이름 같기도 하고.");
+        else lines.push("하늬: …이름처럼 들린다. 아주 짧게.");
+        lines.push("그물지기: 먼저 듣고, 들은 대로 다시 부르시오.");
+        lines.push("그물지기: 그 박자를 손에 남겼소. 싸움에서 여음을 불러 보시오.");
+        startDialog(lines, function(){
+          st.flags.sideEchoDone=true;
+          toast("여음 박자를 기억했다.");
+        });
+        return;
+      }
+      if(st.flags.sideEchoDone){
+        startDialog(["그물지기: 그 여음, 아직 손에 남아 있소. 잊지 마시오."]);
+        return;
+      }
+    }
+    if(kind==="lamplighter"){
+      if(st.flags.ch5epilogue && !st.flags.sideEndDone){
+        st.flags.sideEnd=true;
+        const dawn=st.flags.ch5choice==="dawn";
+        startDialog(dawn?[
+          "등불지기: 아침이 열렸구나. 이름들이 골목으로 돌아왔어.",
+          "등불지기: 슬픔도 함께 왔지만, 불은 꺼지지 않더라.",
+          "하늬: 등불을 지키는 일이, 이제 더 분명해.",
+          "등불지기: 이 남긴 불씨를 가져가. 아침에도 저녁을 잊지 말라고."
+        ]:[
+          "등불지기: 저녁은 온화하게 남았다. 위패는 아직 비어 있어.",
+          "등불지기: 그래도 이 불은, 먼 여음을 기다린 채 타더구나.",
+          "하늬: …들리는 한, 나는 들을게.",
+          "등불지기: 이 남긴 불씨를 가져가. 이름 없는 밤에도 길을 밝히라고."
+        ], function(){
+          st.flags.sideEndDone=true;
+          grantKey("endEmber");
+        });
+        return;
+      }
+    }
+    return _talk(kind);
+  };
+
+  if(window.__RPG){
+    window.__RPG.setFlag=function(k,v){ st.flags[k]=v; };
+    window.__RPG.talk=function(kind){ talkSpecial(kind); };
+    window.__RPG.sideNotes=function(){ return sideNotesList(); };
+    window.__RPG.ensureSides=ensureSideFlags;
+  }
+})();
 
 
 })();
