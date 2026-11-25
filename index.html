@@ -7909,7 +7909,7 @@ window.__MAPHD={
       const dx=Math.round(x*TW-cx), dy=Math.round(y*TW-cy);
       if(dx<-TW*3||dy<-TW*3||dx>384+TW*2||dy>576+TW*2) return;
       const AR=window.__x9art?window.__x9art(m,x,y):null;
-      if(AR) return; // 배경 그림 속 상자: 그림 하나만 쓴다.
+      if(AR || window.__x9chestSprs) return; // 그림 속 상자·깊이 정렬은 스프라이트 패스
       if(chestOpenAt(m,x,y)){ blitOpenChest(dx,dy,TW); return; }
       // typ C closed chests (k1/k2 on the live castle HD map)
       if(typeof tileCh==="function" && (tileCh(m,x,y)==="C"||(m.chests||[]).some(function(c){return c&&c.x===x&&c.y===y;}))){
@@ -7946,6 +7946,7 @@ window.__MAPHD={
         if(!draw) continue;
         const name=tileSprite(m,c,tx,ty);
         const dx=Math.round(tx*TW-cx), dy=Math.round(ty*TW-cy);
+        if(c==="+" && window.__x9gate) continue;
         if(window.__x9blit && c!=="+") window.__x9blit(name, dx, dy, 32, 32);
         else if(typeof blit32==="function") blit32(name, dx, dy, 32, 32);
       }
@@ -8157,6 +8158,7 @@ window.__MAPHD={
       ctx.drawImage(rec.o, -cx-(rec.padX||0)*TW, -cy-(rec.padY||0)*TW, rec.o.naturalWidth*(TW/32), rec.o.naturalHeight*(TW/32));
       ctx.imageSmoothingEnabled=prevSmooth;
     }
+    if(window.__x9afterOver) window.__x9afterOver(m,cx,cy,TW);
 
     // 위쪽 수풀 레이어에는 나무 타일만 한 번 더 눌러 배우와 길의 대비를 보존한다.
     southForestNightGrade(m, cx, cy, TW, true);
@@ -14772,10 +14774,10 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
   };
   // 배경 그림에 이미 상자가 그려진 곳: 그림 위치(ax,ay 칸)로 연 상자를 맞추고, 그림 칸을 막고, 그 칸을 봐도 열리게 한다.
   const ART={
-    "climb:c4":{ax:-0.8,ay:-0.5,cells:[[4,15],[4,16]]},
-    "nave:c5":{ax:0.6,ay:-0.6,cells:[[3,8],[3,9],[4,8],[4,9]]},
-    "castle:n1":{ax:1,ay:1,cells:[[3,4]]},
-    "castle:n2":{ax:-1,ay:1,cells:[[12,4]]}
+    "climb:c4":{ax:-1.05,ay:-0.48,sc:3.25,cells:[[4,15],[4,16]]},
+    "nave:c5":{ax:0.58,ay:-0.62,sc:2.5,cells:[[3,8],[3,9],[4,8],[4,9]]},
+    "castle:n1":{ax:0.15,ay:1.05,sc:1.42,fy:0.62,cells:[[3,4]]},
+    "castle:n2":{ax:-0.15,ay:1.05,sc:1.42,fy:0.62,cells:[[12,4]]}
   };
   function mapKey(m){ if(m&&m.id) return m.id; let k=null; Object.keys(MAPS).forEach(function(id){ if(MAPS[id]===m) k=id; }); return k; }
   window.__x9art=function(m,x,y){
@@ -14803,13 +14805,186 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
   }
   Object.keys(MAPS).forEach(alignMap);
   let x9drew=false;
+  window.__x9gate=true;
+  window.__x9chestSprs=true;
+  function gateOpenFor(m){
+    const id=(m&&m.id)||st.mapId, n=m&&m.name;
+    if(id==="castle"||n==="노을성") return !!st.flags.ch2gate;
+    if(id==="well"||n==="메아리 우물") return !!st.flags.ch3gate;
+    if(id==="ascent"||n==="종루 층계참") return !!st.flags.ch4gate;
+    if(id==="gallery"||n==="울림층") return !!st.flags.ch5gate;
+    return !!st.flags.gateOpen;
+  }
+  function plusSpans(m){
+    const rows=m&&m.tiles||[], out=[];
+    for(let y=0;y<rows.length;y++){
+      const row=rows[y]||""; let x=0;
+      while(x<row.length){
+        if(row[x]!=="+"){ x++; continue; }
+        let x2=x; while(x2<row.length&&row[x2]==="+") x2++;
+        out.push({x:x,y:y,w:x2-x}); x=x2;
+      }
+    }
+    return out;
+  }
+  const GATEC={};
+  function caveGateCan(open){
+    const k=open?1:0; if(GATEC[k]) return GATEC[k];
+    const c=document.createElement("canvas"); c.width=80; c.height=112;
+    const g=c.getContext("2d");
+    function blob(x,y,rx,ry,col){ g.fillStyle=col; g.beginPath(); g.ellipse(x,y,rx,ry,0,0,Math.PI*2); g.fill(); }
+    const stones=[
+      [40,22,14,7,"#3a2a34"],[28,30,8,8,"#4a3844"],[52,30,8,8,"#35242e"],
+      [24,48,7,10,"#3a2a32"],[56,48,7,10,"#4a3840"],
+      [24,68,7,10,"#2e2030"],[56,68,7,10,"#3c2c38"],
+      [26,86,8,8,"#4a3844"],[54,86,8,8,"#35242e"],
+      [32,24,6,5,"#5a4860"],[48,24,6,5,"#2a1c26"]
+    ];
+    stones.forEach(function(r){ blob(r[0],r[1],r[2],r[3],r[4]); });
+    // inner recess
+    g.fillStyle="rgba(8,4,12,0.92)";
+    g.beginPath(); g.moveTo(24,100); g.lineTo(24,54); g.quadraticCurveTo(24,26,40,24); g.quadraticCurveTo(56,26,56,54); g.lineTo(56,100); g.closePath(); g.fill();
+    if(open){
+      const rg=g.createRadialGradient(40,72,4,40,78,36);
+      rg.addColorStop(0,"rgba(255,190,80,0.32)"); rg.addColorStop(0.45,"rgba(180,90,40,0.10)"); rg.addColorStop(1,"rgba(20,8,16,0)");
+      g.fillStyle=rg; g.beginPath(); g.ellipse(40,78,22,28,0,0,Math.PI*2); g.fill();
+      g.fillStyle="rgba(10,6,14,0.7)"; g.beginPath(); g.ellipse(40,100,16,4,0,0,Math.PI*2); g.fill();
+    } else {
+      // wooden door
+      g.fillStyle="#3a2418"; g.beginPath(); g.moveTo(26,98); g.lineTo(26,56); g.quadraticCurveTo(26,30,40,28); g.quadraticCurveTo(54,30,54,56); g.lineTo(54,98); g.closePath(); g.fill();
+      g.strokeStyle="rgba(20,10,8,0.55)"; g.lineWidth=1.2;
+      for(let i=0;i<5;i++){ const yy=42+i*11; g.beginPath(); g.moveTo(28,yy); g.quadraticCurveTo(40,yy-1,52,yy); g.stroke(); }
+      g.fillStyle="#c9a55a"; g.fillRect(37,62,6,8); g.fillStyle="#2a1810"; g.fillRect(39,64,2,4);
+      g.strokeStyle="rgba(180,150,90,0.45)"; g.lineWidth=2; g.beginPath(); g.moveTo(28,88); g.lineTo(52,88); g.stroke();
+      g.strokeStyle="rgba(255,210,140,0.35)"; g.lineWidth=1.2; g.beginPath(); g.moveTo(51,36); g.quadraticCurveTo(53,56,51,96); g.stroke();
+    }
+    // threshold stones
+    blob(30,104,10,5,"#3a2a32"); blob(50,104,10,5,"#4a3844"); blob(40,106,8,4,"#2a1c24");
+    GATEC[k]=c; return c;
+  }
+  function drawCaveGate(span,cx,cy,TW,open){
+    const can=caveGateCan(open);
+    const w=TW*1.22, h=TW*1.62;
+    const dx=span.x*TW-cx+(TW*span.w-w)/2, dy=span.y*TW-cy-TW*0.42;
+    ctx.imageSmoothingEnabled=true;
+    ctx.drawImage(can, dx, dy, w, h);
+    ctx.imageSmoothingEnabled=false;
+    if(open){
+      ctx.save(); ctx.globalCompositeOperation="lighter";
+      const fl=0.16+0.08*Math.sin((st.tick||0)*0.18);
+      const gx=dx+w*0.5, gy=dy+h*0.62, r=w*0.55;
+      const rg=ctx.createRadialGradient(gx,gy,2,gx,gy,r);
+      rg.addColorStop(0,"rgba(255,190,80,"+fl+")"); rg.addColorStop(1,"rgba(255,140,40,0)");
+      ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(gx,gy,r,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+  }
+  function drawWellOpen(span,cx,cy,TW){
+    const x0=span.x*TW-cx, y1=(span.y+1)*TW-cy, w=span.w*TW, h=TW*2.05;
+    const x=x0, y=y1-h;
+    ctx.save();
+    // dark passage, soft arch (flatter, fits the painted frame)
+    ctx.beginPath();
+    ctx.moveTo(x+5,y1-2); ctx.lineTo(x+5,y+h*0.20); ctx.quadraticCurveTo(x+w*0.5,y+h*0.02,x+w-5,y+h*0.20); ctx.lineTo(x+w-5,y1-2);
+    ctx.closePath();
+    const vg=ctx.createLinearGradient(x,y,x,y1);
+    vg.addColorStop(0,"rgba(8,4,14,0.0)"); vg.addColorStop(0.18,"rgba(8,4,14,0.72)"); vg.addColorStop(1,"rgba(8,4,14,0.9)");
+    ctx.fillStyle=vg; ctx.fill();
+    ctx.globalCompositeOperation="lighter";
+    const fl=0.14+0.07*Math.sin((st.tick||0)*0.16);
+    const gx=x+w*0.5, gy=y+h*0.7, r=w*0.7;
+    const rg=ctx.createRadialGradient(gx,gy,2,gx,gy,r);
+    rg.addColorStop(0,"rgba(255,200,110,"+fl+")"); rg.addColorStop(0.5,"rgba(200,110,50,"+(fl*0.35)+")"); rg.addColorStop(1,"rgba(255,140,40,0)");
+    ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(gx,gy,r,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  function blitOpenX(dx,dy,TW){
+    if(typeof blitOpenChest==="function") return blitOpenChest(dx,dy,TW);
+    const img=window.__CHEST_OPEN_IMG;
+    if(img&&img.naturalWidth){
+      const dw=Math.round(TW*2.4), dh=Math.round(dw*(img.naturalHeight/img.naturalWidth));
+      const ox=Math.round(dx+(TW-dw)/2), oy=Math.round(dy+TW-dh*0.58);
+      const prev=ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled=true;
+      ctx.drawImage(img,ox,oy,dw,dh); ctx.imageSmoothingEnabled=prev; return true;
+    }
+    if(window.__x9blit) return window.__x9blit("chest_open",dx,dy,TW,TW);
+    if(typeof blit32==="function") return blit32("chest_open",dx,dy,TW,TW);
+  }
+  function drawArtOpen(c,art,cx,cy,TW){
+    const ax=c.x+(art.ax||0), ay=c.y+(art.ay||0);
+    const dx=ax*TW-cx, dy=ay*TW-cy;
+    const img=window.__CHEST_OPEN_IMG;
+    const dw=Math.round(TW*(art.sc||2.4));
+    const dh=(img&&img.naturalWidth)?Math.round(dw*(img.naturalHeight/img.naturalWidth)):Math.round(TW*2.2);
+    const ox=Math.round(dx+(TW-dw)/2), oy=Math.round(dy+TW-dh*(art.fy||0.58));
+    ctx.save();
+    const prev=ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled=true;
+    if(img&&img.naturalWidth){
+      // dark silhouette of the open chest covers the painted closed lid (no oval blob)
+      const off=document.createElement("canvas"); off.width=dw+10; off.height=dh+10;
+      const og=off.getContext("2d");
+      og.drawImage(img,5,5,dw,dh);
+      og.globalCompositeOperation="source-atop";
+      og.fillStyle="#1a1216"; og.fillRect(0,0,off.width,off.height);
+      ctx.drawImage(off, ox-5, oy-5);
+      ctx.globalCompositeOperation="lighter";
+      const fl=0.16+0.07*Math.sin((st.tick||0)*0.14);
+      const rg=ctx.createRadialGradient(ox+dw*0.5, oy+dh*0.52, 2, ox+dw*0.5, oy+dh*0.52, dw*0.32);
+      rg.addColorStop(0,"rgba(255,200,110,"+fl+")"); rg.addColorStop(1,"rgba(255,160,60,0)");
+      ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(ox+dw*0.5, oy+dh*0.52, dw*0.32, 0, Math.PI*2); ctx.fill();
+      ctx.globalCompositeOperation="source-over";
+      ctx.drawImage(img, ox, oy, dw, dh);
+    } else if(window.__x9blit){
+      window.__x9blit("chest_open", ox, oy, dw, dh);
+    }
+    ctx.imageSmoothingEnabled=prev;
+    ctx.restore();
+  }
   window.__x9sprs=function(m,cx,cy,TW,sprs){
     try{
-      const s=TW/16, x=X(); x9drew=true;
+      const s=TW/16, x=X(), mid=mapKey(m)||st.mapId; x9drew=true;
       GUARDS.forEach(function(g){ if(g.map!==st.mapId) return;
-        sprs.push({y:g.y*TS, draw:function(){ ctx.save(); ctx.scale(s,s); drawGuardChest(g,(g.x*TW-cx)/s,(g.y*TW-cy)/s,!!x.guard[g.id]); ctx.restore(); }}); });
+        sprs.push({y:g.y*TS+12, draw:function(){ ctx.save(); ctx.scale(s,s); drawGuardChest(g,(g.x*TW-cx)/s,(g.y*TW-cy)/s,!!x.guard[g.id]); ctx.restore(); }}); });
       TRACES.forEach(function(tr){ if(tr.map!==st.mapId||x.traces[tr.id]) return; if(tr.x===st.x&&tr.y===st.y) return;
-        sprs.push({y:tr.y*TS-1, draw:function(){ ctx.save(); ctx.scale(s,s); drawTrace(tr,(tr.x*TW-cx)/s,(tr.y*TW-cy)/s); ctx.restore(); }}); });
+        sprs.push({y:tr.y*TS+10, draw:function(){ ctx.save(); ctx.scale(s,s); drawTrace(tr,(tr.x*TW-cx)/s,(tr.y*TW-cy)/s); ctx.restore(); }}); });
+      (m.chests||[]).forEach(function(c){
+        if(!c) return;
+        const art=ART[mid+":"+c.id];
+        const open=!!(st.flags&&st.flags.chests&&st.flags.chests[c.id]);
+        let foot=c.y*TS+12;
+        if(art&&art.cells&&art.cells.length){ let my=c.y; art.cells.forEach(function(p){ if(p[1]>my) my=p[1]; }); foot=my*TS+12; }
+        if(art){
+          if(open) sprs.push({y:foot, draw:function(){ drawArtOpen(c,art,cx,cy,TW); }});
+          return;
+        }
+        sprs.push({y:foot, draw:function(){
+          const dx=Math.round(c.x*TW-cx), dy=Math.round(c.y*TW-cy);
+          if(open) blitOpenX(dx,dy,TW);
+          else { if(window.__x9blit) window.__x9blit("chest",dx,dy-Math.max(1,TW/16),TW,TW); else if(typeof blit32==="function") blit32("chest",dx,dy-Math.max(1,TW/16),TW,TW); }
+        }});
+      });
+      const typ=m.typ, openG=gateOpenFor(m);
+      plusSpans(m).forEach(function(span){
+        const foot=span.y*TS+14;
+        if(typ==="cave" && (mid==="cave"||(m.id||st.mapId)==="cave")){
+          sprs.push({y:foot, draw:function(){ drawCaveGate(span,cx,cy,TW,openG); }});
+        } else if(typ==="cave" && (mid==="well"||(m.id||st.mapId)==="well")){
+          if(openG) sprs.push({y:foot, draw:function(){ drawWellOpen(span,cx,cy,TW); }});
+        }
+      });
+      window.__x9lastSprs=sprs; window.__x9lastCam={m:m,cx:cx,cy:cy,TW:TW,mid:mid};
+    }catch(e){}
+  };
+  window.__x9afterOver=function(m,cx,cy,TW){
+    try{
+      const mid=mapKey(m)||st.mapId;
+      if((m.typ!=="cave") || (mid!=="cave"&&(m.id||st.mapId)!=="cave")) return;
+      const openG=gateOpenFor(m);
+      plusSpans(m).forEach(function(span){ drawCaveGate(span,cx,cy,TW,openG); });
+      const foot=plusSpans(m)[0]?plusSpans(m)[0].y*TS+14:0;
+      const list=window.__x9lastSprs||[];
+      list.forEach(function(s){ if(s.y>foot) s.draw(); });
     }catch(e){}
   };
 
@@ -15945,7 +16120,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     if(flock&&flock.map!==id) flock=null;
     if(!flock){ if(--nextFlock>0) return; nextFlock=420+Math.floor(Math.random()*480);
       const bat=!!DARK[id], dir=Math.random()<0.5?1:-1, n=bat?1+Math.floor(Math.random()*2):3+Math.floor(Math.random()*3);
-      const by=bat?60+Math.random()*120:30+Math.random()*70;
+      const by=bat?90+Math.random()*90:55+Math.random()*80;
       flock={map:id,bat:bat,dir:dir,t:0,b:[]};
       for(let i=0;i<n;i++) flock.b.push({x:dir>0?-10-i*9-Math.random()*6:W+10+i*9+Math.random()*6, y:by+(i%2?6:-2)*Math.ceil(i/2)+Math.random()*3, ph:Math.random()*6});
     }
@@ -15959,15 +16134,30 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     if(!flock||flock.map!==st.mapId) return;
     ctx.save();
     flock.b.forEach(function(q){
-      const f=Math.sin(flock.t*(flock.bat?0.5:0.22)+q.ph);
-      const w=flock.bat?3:3.4, up=(flock.bat?1.8:1.8)*f;
+      const f=Math.sin(flock.t*(flock.bat?0.48:0.2)+q.ph);
+      const w=flock.bat?6.4:5.0, up=(flock.bat?3.2:2.2)*f;
       if(!flock.bat){
-        ctx.fillStyle="rgba(10,6,14,0.28)"; ctx.beginPath(); ctx.ellipse(q.x+3,q.y+16,2.6,1,0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle="rgba(10,6,14,0.32)"; ctx.beginPath(); ctx.ellipse(q.x+3,q.y+18,3.2,1.2,0,0,Math.PI*2); ctx.fill();
+        ctx.strokeStyle="rgba(248,238,222,0.95)";
+        ctx.lineWidth=1.35; ctx.beginPath();
+        ctx.moveTo(q.x-w,q.y-up); ctx.quadraticCurveTo(q.x-w*0.4,q.y-up*0.2-0.7,q.x,q.y); ctx.quadraticCurveTo(q.x+w*0.4,q.y-up*0.2-0.7,q.x+w,q.y-up); ctx.stroke();
+        ctx.fillStyle="rgba(248,238,222,0.9)"; ctx.beginPath(); ctx.arc(q.x,q.y,0.9,0,Math.PI*2); ctx.fill();
+      } else {
+        // dark silhouette + subtle purple rim (no hard bands)
+        ctx.fillStyle="rgba(46,28,72,0.96)";
+        ctx.beginPath();
+        ctx.moveTo(q.x,q.y);
+        ctx.quadraticCurveTo(q.x-w*0.45,q.y-up*0.2,q.x-w,q.y-up);
+        ctx.quadraticCurveTo(q.x-w*0.35,q.y+1.4,q.x,q.y+0.6);
+        ctx.quadraticCurveTo(q.x+w*0.35,q.y+1.4,q.x+w,q.y-up);
+        ctx.quadraticCurveTo(q.x+w*0.45,q.y-up*0.2,q.x,q.y);
+        ctx.fill();
+        ctx.strokeStyle="rgba(210,175,255,0.8)";
+        ctx.lineWidth=1.05; ctx.beginPath();
+        ctx.moveTo(q.x-w*0.75,q.y-up*0.65); ctx.quadraticCurveTo(q.x,q.y-1.0,q.x+w*0.75,q.y-up*0.65); ctx.stroke();
+        ctx.fillStyle="rgba(58,36,90,0.95)"; ctx.beginPath(); ctx.arc(q.x,q.y,1.7,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle="rgba(230,200,255,0.75)"; ctx.beginPath(); ctx.arc(q.x+0.6,q.y-0.4,0.7,0,Math.PI*2); ctx.fill();
       }
-      ctx.strokeStyle=flock.bat?"rgba(150,120,190,0.85)":"rgba(246,236,220,0.92)";
-      ctx.lineWidth=flock.bat?1.3:1.1; ctx.beginPath();
-      ctx.moveTo(q.x-w,q.y-up); ctx.quadraticCurveTo(q.x-w*0.4,q.y-up*0.2-0.6,q.x,q.y); ctx.quadraticCurveTo(q.x+w*0.4,q.y-up*0.2-0.6,q.x+w,q.y-up); ctx.stroke();
-      if(flock.bat){ ctx.fillStyle="rgba(200,170,240,0.6)"; ctx.beginPath(); ctx.arc(q.x,q.y,1.1,0,Math.PI*2); ctx.fill(); }
     });
     ctx.restore();
   }
