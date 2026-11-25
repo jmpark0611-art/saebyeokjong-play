@@ -6731,7 +6731,16 @@ window.__drawLanternLane = function(ctx, opt){
 
   // labels
   if(textFn){
-    if(beating) textFn(enemyTurn?"A 받아치기":"A 두드리기", L.x+12, L.y+6, enemyTurn?"#d8b0ff":"#ffe9a8", 9, "left");
+    let laneLab=opt.laneLabel;
+    if(!laneLab && beating){
+      const open=(notes||[]).filter(function(n){ return n&&!n.judged&&!n.hush&&!n.listen&&!n.decoy; }).slice().sort(function(a,b){ return a.hitAt-b.hitAt; });
+      const typ=open[0]&&open[0].typ;
+      if(typ==="hold") laneLab=enemyTurn?"A 길게 받아치기":"A 길게 누르기";
+      else if(typ==="dbl") laneLab=enemyTurn?"A 두 번 받아치기":"A 두 번 누르기";
+      else if(typ==="sync") laneLab=enemyTurn?"A 엇박 받아치기":"A 엇박";
+      else laneLab=enemyTurn?"A 받아치기":"A 두드리기";
+    }
+    if(beating) textFn(laneLab||(enemyTurn?"A 받아치기":"A 두드리기"), L.x+12, L.y+6, enemyTurn?"#d8b0ff":"#ffe9a8", 9, "left");
     if(opt.showNow){
       textFn("지금!", lx, L.y-18, "#ffe98a", 12, "center");
     }
@@ -7033,7 +7042,7 @@ window.__galmuriBlit=function(ctx,s,x,y,col,sz,al){
       easy:!!st.easy,
       fx:RHY.fx||(RHY.fx=[]),
       combo:RHY.combo||0,
-      lastJudge:RHY.lastJudge,
+      lastJudge:(st.battle&&(st.battle.phase==="win"||st.battle.phase==="lose"))?null:RHY.lastJudge,
       lastJudgeT:RHY.lastJudgeT,
       bpm:typeof rhyBpm==="function"?rhyBpm():80,
       showNow:showNow,
@@ -7451,7 +7460,7 @@ window.__galmuriBlit=function(ctx,s,x,y,col,sz,al){
       easy:!!st.easy,
       fx:RHY.fx||(RHY.fx=[]),
       combo:RHY.combo||0,
-      lastJudge:RHY.lastJudge,
+      lastJudge:(st.battle&&(st.battle.phase==="win"||st.battle.phase==="lose"))?null:RHY.lastJudge,
       lastJudgeT:RHY.lastJudgeT,
       bpm:typeof rhyBpm==="function"?rhyBpm():80,
       showNow:showNow,
@@ -13774,7 +13783,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
         usableP.forEach(function(n,idx){ if(idx===usableP.length-1||idx===0){ n.typ="dbl"; n._taps=0; } });
         st.battle.msg="두 번 누르기 연습. 두 번 두드린다.";
       } else if(kind==="sync"){
-        usableP.forEach(function(n,idx){ if(idx===1||idx===usableP.length-1){ n.hitAt+=beat*0.42; n.typ="sync"; } });
+        usableP.forEach(function(n){ n.hitAt+=beat*0.42; n.typ="sync"; });
         st.battle.msg="엇박 맞추기 연습. 이른 숨에 맞춰라.";
       } else {
         st.battle.msg="기본 두드리기 연습.";
@@ -13921,6 +13930,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     _sp(ch, action, isEnemy);
     tagNotes(isEnemy);
     maybeTut();
+    if(typeof syncAccessibleStatus==="function") syncAccessibleStatus();
   };
 
   const _tap=rhyTap;
@@ -14183,14 +14193,15 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
         const tw=Math.ceil(raw)+10;
         const cx=Number.isFinite(e._rhyX)?e._rhyX:40;
         const top=Number.isFinite(e._rhyTop)?e._rhyTop:(Number.isFinite(e._rhyY)?e._rhyY-22:48);
-        let bx=Math.round(cx-tw/2), by=Math.round(top-bh-2);
+        let bx=Math.round(cx-tw/2), by=Math.round(top-bh-6);
         if(top<16) by=14;
         if(e.id==="wight"||e.mon==="longshade") by=Math.max(10, Math.round(top-bh+2));
+        if(by+bh>top-2) by=Math.max(margin, top-bh-6);
         if(bx<margin) bx=margin;
         if(bx+tw>stageW-margin) bx=stageW-margin-tw;
         if(by<margin) by=margin;
         if(by+bh>stageH-16) by=stageH-16-bh;
-        boxes.push({e:e,lab:lab,tw:tw,bh:bh,bx:bx,by:by});
+        boxes.push({e:e,lab:lab,tw:tw,bh:bh,bx:bx,by:by,top:top});
       });
       boxes.sort(function(a,b){ return a.bx-b.bx; });
       for(let i=1;i<boxes.length;i++){
@@ -14198,10 +14209,11 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
         if(cur.bx<prev.bx+prev.tw+4 && Math.abs(cur.by-prev.by)<bh+2){
           cur.bx=prev.bx+prev.tw+4;
           if(cur.bx+cur.tw>stageW-margin){
-            cur.bx=stageW-margin-cur.tw;
-            cur.by=Math.min(stageH-16-bh, prev.by+bh+3);
+            cur.bx=Math.min(cur.bx, stageW-margin-cur.tw);
+            cur.by=Math.max(margin, Math.min(cur.top, prev.top)-bh-6);
           }
         }
+        if(cur.by+cur.bh>cur.top-1) cur.by=Math.max(margin, cur.top-cur.bh-6);
       }
       boxes.forEach(function(box){
         pill(box.bx, box.by, box.tw, box.bh, "rgba(10,12,28,0.86)");
@@ -14266,19 +14278,31 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     if(!b) return s;
     const parts=[];
     if(b.phase==="noteTut") return "박자 안내, "+(b.msg||"");
+    if(b.phase==="win") return (b.winLines&&b.winLines[b.winI])||b.msg||"승리";
+    if(b.phase==="lose") return b.msg||"패배";
     if(b.phase==="command"&&b.sub==="syncs"){
       const opts=b.syncList||[];
       return "맞소리, "+(opts[b.syncIdx]||"")+", "+((b.syncIdx||0)+1)+" / "+opts.length;
     }
+    const beating=["beats","enemy_beats","countin","enemy_countin"].indexOf(RHY.phase)>=0;
+    if(beating){
+      const open=(RHY.notes||[]).filter(function(n){ return n&&!n.judged&&!n.hush&&!n.listen&&!n.decoy; }).slice().sort(function(a,b){ return a.hitAt-b.hitAt; });
+      const typ=open[0]&&open[0].typ;
+      const enemyTurn=String(RHY.phase).indexOf("enemy")>=0;
+      if(typ==="hold") parts.push(enemyTurn?"길게 받아치기":"길게 누르기");
+      else if(typ==="dbl") parts.push(enemyTurn?"두 번 받아치기":"두 번 누르기");
+      else if(typ==="sync") parts.push(enemyTurn?"엇박 받아치기":"엇박");
+      else parts.push(enemyTurn?"받아치기":"두드리기");
+    }
     const ens=allE().filter(function(e){ return e.hp>0; });
-    if(ens.length){
+    if(ens.length && b.phase!=="win"){
       const intent=ens.map(function(e){ return e.name+", 다음 "+intentTxt(e); }).join(", ");
       parts.push(intent);
     }
-    if(RHY.lastJudge && (RHY.t-(RHY.lastJudgeT||0))<1.2){
+    if(b.phase!=="win"&&b.phase!=="lose"&&RHY.lastJudge && (RHY.t-(RHY.lastJudgeT||0))<1.2){
       const lab=RHY.lastJudge==="perfect"?"정박":RHY.lastJudge==="good"?"가깝게":"빗나감";
       parts.push(lab+(RHY.combo>=2?", 연속 "+RHY.combo:""));
-    } else if(RHY.combo>=2){ parts.push("연속 "+RHY.combo); }
+    } else if(b.phase!=="win"&&b.phase!=="lose"&&RHY.combo>=2){ parts.push("연속 "+RHY.combo); }
     if((b.syncG||0)>=80 && syncReady()) parts.push("맞소리 준비");
     if(b._srPhase) parts.push(b._srPhase);
     if(ens.some(function(e){ return e.phase2; })) parts.push("소리가 달라졌다");
@@ -14289,6 +14313,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
   const _bw=typeof beginWin==="function"?beginWin:null;
   if(_bw){
     beginWin=function(){
+      if(typeof RHY!=="undefined"){ RHY.lastJudge=null; RHY.lastJudgeT=-99; }
       _bw();
       const b=st.battle;
       if(b&&b._practice){ endPractice(); return; }
@@ -14466,6 +14491,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     window.__RPG.fillSync=function(){ if(st.battle) st.battle.syncG=100; };
     window.__RPG.setNoteFlag=function(k,v){ st.flags[k]=v; };
     window.__RPG.startPractice=function(mode){ startPractice(mode||"all"); };
+    window.__RPG.beginWin=function(){ if(typeof beginWin==="function") beginWin(); };
   }
 })();
 
