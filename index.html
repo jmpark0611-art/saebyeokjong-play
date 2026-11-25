@@ -13433,7 +13433,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
 
 
 
-/* ===== 골가지 이야기: side quests, 기록 menu ===== */
+/* ===== 곁가지 이야기: side quests, 기록 menu ===== */
 (function(){
   const SIDE_FLAGS=["sideName","sideNameDone","sideBell","sideBellDone","sideEcho","sideEchoDone","sideEnd","sideEndDone"];
   function ensureSideFlags(){
@@ -13553,7 +13553,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
       const opts=m.opts||[];
       const n=Math.max(1,opts.length);
       win(12, 32, 168, 44+n*18);
-      text("골가지 이야기", 20, 38, gold(), 11);
+      text("곁가지 이야기", 20, 38, gold(), 11);
       opts.forEach(function(o,i){
         const y=58+i*18;
         if(i===m.idx && typeof highlightBar==="function") highlightBar(16,y-2,160,16);
