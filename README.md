@@ -4,6 +4,8 @@
 
 **플레이:** https://jmpark0611-art.github.io/saebyeokjong-play/
 
+휴대폰 브라우저에서 홈 화면에 추가하면 앱처럼 열 수 있습니다.
+
 ## 폰트 라이선스
 
 이 게임에는 Galmuri 글꼴이 포함되어 있습니다.

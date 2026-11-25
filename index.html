@@ -2,7 +2,15 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0e1020">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="새벽종">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>새벽종</title>
 <style>
 
@@ -41,22 +49,38 @@
 
 :root{--safe-top:env(safe-area-inset-top,0px);--safe-right:env(safe-area-inset-right,0px);
   --safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);}
-html,body{margin:0;padding:0;width:100%;height:100%;height:100dvh;background:#0e1020;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;
+html,body{margin:0;padding:0;width:100%;height:100%;height:100dvh;height:100svh;background:#0e1020;overflow:hidden;touch-action:none;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;
+  overscroll-behavior:none;
   font-family:"Galmuri11","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;}
-body{display:flex;align-items:center;justify-content:center;box-sizing:border-box;
+body{display:flex;align-items:stretch;justify-content:center;box-sizing:border-box;
   padding:var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);}
-#app{width:390px;height:844px;flex:none;transform-origin:center center;background:
+#app{width:100%;height:100%;max-width:480px;flex:1 1 auto;min-height:0;background:
   radial-gradient(ellipse at 50% 18%,#2a2a4a 0%,#121222 70%);
-  display:flex;flex-direction:column;align-items:center;box-sizing:border-box;padding:16px 10px 10px;position:relative;}
+  display:flex;flex-direction:column;align-items:center;box-sizing:border-box;padding:12px 8px 8px;position:relative;}
+#rotate{display:none;position:fixed;inset:0;z-index:40;background:#0e1020;color:#e8d8b8;
+  font-family:inherit;font-size:18px;letter-spacing:.06em;line-height:1.7;
+  align-items:center;justify-content:center;text-align:center;
+  padding:max(24px,var(--safe-top)) max(24px,var(--safe-right)) max(24px,var(--safe-bottom)) max(24px,var(--safe-left));}
+body.is-landscape #rotate{display:flex;}
+body.is-landscape #app{visibility:hidden;pointer-events:none;}
 #frame{background:linear-gradient(180deg,#6a5a3a,#3a3020 55%,#2a2418);
   border-radius:16px;padding:10px 10px 8px;box-shadow:0 8px 0 #1a140c,0 14px 28px rgba(0,0,0,.5);
   border:2px solid #c4a86a;}
 #mat{background:#1a2450;border-radius:6px;padding:5px;box-shadow:inset 0 0 0 1px #c8b070;}
-canvas#g{display:block;width:384px;height:576px;background:#0a0c18;image-rendering:pixelated;image-rendering:crisp-edges;border-radius:2px;}
+canvas#g{display:block;width:384px;height:576px;background:#0a0c18;image-rendering:pixelated;image-rendering:-moz-crisp-edges;image-rendering:crisp-edges;border-radius:2px;touch-action:none;-webkit-touch-callout:none;}
 #brand{text-align:center;color:#e8d4a0;font-size:11px;letter-spacing:.14em;margin:7px 0 2px;text-shadow:0 1px 0 #1a140c;}
 #brand b{font-size:13px;font-weight:700;letter-spacing:.2em;}
-#controls{margin-top:8px;width:360px;flex:1;display:flex;align-items:center;justify-content:space-between;
-  padding:0 14px 6px;box-sizing:border-box;}
+#controls{margin-top:auto;width:100%;max-width:400px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px 6px;box-sizing:border-box;touch-action:none;}
+#dpad .cell,.btn,.pill{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:none;}
+#app.compact #dpad{width:124px;height:124px;}
+#app.compact #dpad .cell{width:40px;height:40px;}
+#app.compact #dpad .u{left:42px;top:0;} #app.compact #dpad .d{left:42px;bottom:0;}
+#app.compact #dpad .l{left:0;top:42px;} #app.compact #dpad .r{right:0;top:42px;}
+#app.compact #dpad .nub{left:44px;top:44px;width:36px;height:36px;}
+#app.compact .btn{width:54px;height:54px;font-size:18px;}
+#app.compact #controls{padding:0 8px 2px;}
 #dpad{position:relative;width:148px;height:148px;}
 #dpad .cell{position:absolute;width:48px;height:48px;background:linear-gradient(180deg,#7a7058,#3e3828);
   border:2px solid #1a160c;border-radius:8px;box-shadow:0 3px 0 #0c0a06,inset 0 1px 0 #c8bea0;
@@ -81,10 +105,11 @@ canvas#g{display:block;width:384px;height:576px;background:#0a0c18;image-renderi
 .cell:focus-visible,.btn:focus-visible,.pill:focus-visible{outline:3px solid #f4d878;outline-offset:3px;}
 .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;
   overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important;}
-#hint{position:absolute;bottom:7px;left:0;right:0;text-align:center;color:#8a8068;font-size:10px;opacity:.8;pointer-events:none;}
+#hint{flex:0 0 auto;margin-top:4px;text-align:center;color:#8a8068;font-size:10px;opacity:.8;pointer-events:none;}
 </style>
 </head>
 <body>
+<div id="rotate" role="status" aria-live="polite" aria-hidden="true">화면을 세로로 돌려 주세요</div>
 <div id="app">
   <div id="frame"><div id="mat"><canvas id="g" width="384" height="576"></canvas></div></div>
   <div id="brand"><b>새벽종</b> · 1장 끝나지 않는 하루</div>
@@ -132,16 +157,55 @@ function fitAppToViewport(){
   const viewport=window.visualViewport;
   const width=viewport?viewport.width:window.innerWidth;
   const height=viewport?viewport.height:window.innerHeight;
+  const landscape=width>height && Math.min(width,height)<=600;
+  document.body.classList.toggle("is-landscape", landscape);
+  const rotateEl=document.getElementById("rotate");
+  if(landscape){
+    if(rotateEl) rotateEl.setAttribute("aria-hidden","false");
+    appRoot.setAttribute("aria-hidden","true");
+    return;
+  }
+  appRoot.removeAttribute("aria-hidden");
+  if(rotateEl) rotateEl.setAttribute("aria-hidden","true");
   const bodyStyle=getComputedStyle(document.body);
   const safeWidth=(parseFloat(bodyStyle.paddingLeft)||0)+(parseFloat(bodyStyle.paddingRight)||0);
   const safeHeight=(parseFloat(bodyStyle.paddingTop)||0)+(parseFloat(bodyStyle.paddingBottom)||0);
   const availableWidth=Math.max(1,width-safeWidth);
   const availableHeight=Math.max(1,height-safeHeight);
-  appRoot.style.transform="scale("+Math.min(1,availableWidth/390,availableHeight/844)+")";
+  appRoot.style.transform="none";
+  appRoot.style.width="100%";
+  appRoot.style.height="100%";
+  appRoot.classList.toggle("compact", availableHeight<680 || availableWidth<370);
+  const gameCanvas=document.getElementById("g");
+  const frame=document.getElementById("frame");
+  const mat=document.getElementById("mat");
+  const brand=document.getElementById("brand");
+  const controls=document.getElementById("controls");
+  const hint=document.getElementById("hint");
+  const cs=getComputedStyle(appRoot);
+  const padX=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
+  const padY=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);
+  const framePad=frame?((parseFloat(getComputedStyle(frame).paddingLeft)||0)+(parseFloat(getComputedStyle(frame).paddingRight)||0)+(parseFloat(getComputedStyle(frame).borderLeftWidth)||0)+(parseFloat(getComputedStyle(frame).borderRightWidth)||0)):24;
+  const framePadY=frame?((parseFloat(getComputedStyle(frame).paddingTop)||0)+(parseFloat(getComputedStyle(frame).paddingBottom)||0)+(parseFloat(getComputedStyle(frame).borderTopWidth)||0)+(parseFloat(getComputedStyle(frame).borderBottomWidth)||0)):20;
+  const matPad=mat?((parseFloat(getComputedStyle(mat).paddingLeft)||0)*2):10;
+  const matPadY=mat?((parseFloat(getComputedStyle(mat).paddingTop)||0)*2):10;
+  const chromeY=(brand?brand.offsetHeight:0)+(controls?controls.offsetHeight:0)+(hint?hint.offsetHeight:0)+padY+framePadY+matPadY+8;
+  const maxW=Math.max(64, availableWidth-padX-framePad-matPad);
+  const maxH=Math.max(64, availableHeight-chromeY);
+  let scale=Math.min(maxW/384, maxH/576);
+  if(scale>1) scale=Math.min(scale, 1.35);
+  const cssW=Math.max(1, Math.floor(384*scale));
+  const cssH=Math.round(cssW*576/384);
+  if(gameCanvas){ gameCanvas.style.width=cssW+"px"; gameCanvas.style.height=cssH+"px"; }
 }
 fitAppToViewport();
+fitAppToViewport();
 window.addEventListener("resize",fitAppToViewport);
-if(window.visualViewport) window.visualViewport.addEventListener("resize",fitAppToViewport);
+window.addEventListener("orientationchange",function(){ setTimeout(fitAppToViewport, 80); });
+if(window.visualViewport){
+  window.visualViewport.addEventListener("resize",fitAppToViewport);
+  window.visualViewport.addEventListener("scroll",fitAppToViewport);
+}
 const W=192,H=288,TS=16;
 const SAVE_KEY="saebyeokjong_ch1_save", MUTE_KEY="saebyeokjong_muted";
 const canvas=document.getElementById("g");
@@ -831,10 +895,17 @@ window.addEventListener("keyup",e=>{
 },{passive:false});
 document.querySelectorAll("[data-k]").forEach(el=>{
   const k=el.getAttribute("data-k");
-  el.addEventListener("pointerdown",e=>{ el.setPointerCapture(e.pointerId); e.preventDefault(); audio.gesture(); press(el.getAttribute("data-k"),1); });
-  el.addEventListener("pointerup",e=>{ e.preventDefault(); press(el.getAttribute("data-k"),0); });
-  el.addEventListener("pointercancel",e=>press(el.getAttribute("data-k"),0));
-  el.addEventListener("lostpointercapture",e=>press(el.getAttribute("data-k"),0));
+  const hold=function(on){ return function(e){ if(e.cancelable) e.preventDefault(); audio.gesture(); press(el.getAttribute("data-k"), on?1:0); }; };
+  if(window.PointerEvent){
+    el.addEventListener("pointerdown",e=>{ try{ el.setPointerCapture(e.pointerId); }catch(err){} hold(1)(e); },{passive:false});
+    el.addEventListener("pointerup",hold(0),{passive:false});
+    el.addEventListener("pointercancel",hold(0));
+    el.addEventListener("lostpointercapture",hold(0));
+  } else {
+    el.addEventListener("touchstart",hold(1),{passive:false});
+    el.addEventListener("touchend",hold(0),{passive:false});
+    el.addEventListener("touchcancel",hold(0));
+  }
   el.addEventListener("keydown",e=>{
     if(e.key!=="Enter"&&e.key!==" ") return;
     e.preventDefault(); e.stopPropagation(); audio.gesture(); press(k,1);
@@ -851,7 +922,23 @@ document.querySelectorAll("[data-k]").forEach(el=>{
 });
 window.addEventListener("blur",releaseAllInputs);
 window.addEventListener("pagehide",releaseAllInputs);
-document.addEventListener("visibilitychange",()=>{ if(document.hidden) releaseAllInputs(); });
+document.addEventListener("contextmenu",e=>e.preventDefault());
+document.addEventListener("gesturestart",e=>e.preventDefault());
+document.addEventListener("gesturechange",e=>e.preventDefault());
+document.addEventListener("gestureend",e=>e.preventDefault());
+document.addEventListener("dblclick",e=>e.preventDefault());
+document.addEventListener("touchmove",e=>{ if(e.cancelable) e.preventDefault(); },{passive:false});
+document.addEventListener("touchstart",()=>{ try{ audio.gesture(); }catch(err){} },{passive:true});
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){
+    releaseAllInputs();
+    try{ frozen=true; }catch(err){}
+    try{ if(typeof audio!=="undefined" && audio.suspend) audio.suspend(); }catch(err){}
+  } else {
+    try{ frozen=false; last=performance.now(); acc=0; }catch(err){}
+    try{ if(typeof audio!=="undefined" && audio.gesture) audio.gesture(); }catch(err){}
+  }
+});
 
 
 /* ---------- audio ---------- */
@@ -868,6 +955,7 @@ const audio=(()=>{
     return ac;
   }
   function gesture(){ const a=ensure(); if(!a) return; if(a.state==="suspended") a.resume(); started=true; }
+  function suspend(){ if(ac && ac.state==="running") ac.suspend(); }
   function setMuted(m){
     st.muted=!!m;
     try{ localStorage.setItem(MUTE_KEY, st.muted?"1":"0"); }catch(e){}
@@ -1035,7 +1123,7 @@ const audio=(()=>{
       setTimeout(function(){ beep(523,1.4,"triangle",0.03); },220);
     }
   };
-  return {gesture,setMuted,toggleMute,setSong,tickMusic,sfx,get started(){return started;}, get song(){return song;}};
+  return {gesture,suspend,setMuted,toggleMute,setSong,tickMusic,sfx,get started(){return started;}, get song(){return song;}};
 })();
 
 function musicForMap(){
@@ -3028,14 +3116,10 @@ function frame(t){
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-function fit(){
-  const app=document.getElementById("app");
-  const s=Math.min(window.innerWidth/390, window.innerHeight/844);
-  app.style.transformOrigin="center center";
-  app.style.transform=Math.abs(s-1)>0.02?("scale("+s+")"):"";
-}
+function fit(){ fitAppToViewport(); }
 window.addEventListener("resize",fit); fit();
 window.addEventListener("pointerdown",()=>audio.gesture());
+window.addEventListener("touchstart",()=>audio.gesture(),{passive:true});
 
 
 /* ===== 새벽종 1장 패치: 이야기, HD 타일, 박자 전투, 안개 띠 ===== */
@@ -13342,6 +13426,11 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
 })();
 })();
 
+if("serviceWorker" in navigator){
+  window.addEventListener("load",function(){
+    navigator.serviceWorker.register("sw.js",{scope:"./"}).catch(function(){});
+  });
+}
 </script>
 </body>
 </html>
