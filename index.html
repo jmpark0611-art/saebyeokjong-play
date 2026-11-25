@@ -791,7 +791,8 @@ function validSavedFlags(flags){
     "ch3","ch3end","ch3intro","ch3story","ch3gate","ch3boss",
     "ch4","ch4end","ch4intro","ch4story","ch4gate","ch4boss",
     "ch5","ch5end","ch5intro","ch5story","ch5gate","ch5boss","ch5epilogue","_ch5peak",
-    "sideName","sideNameDone","sideBell","sideBellDone","sideEcho","sideEchoDone","sideEnd","sideEndDone"];
+    "sideName","sideNameDone","sideBell","sideBellDone","sideEcho","sideEchoDone","sideEnd","sideEndDone",
+    "tutHold","tutDouble","tutSync"];
   const keys=bools.concat(["chests","lamps","ch2bells","ch3names","ch4bells","ch5tabs","ch5choice"]);
   if(Object.keys(flags).some(k=>!keys.includes(k))) return false;
   if(bools.some(k=>Object.prototype.hasOwnProperty.call(flags,k) && typeof flags[k]!=="boolean")) return false;
@@ -3915,6 +3916,7 @@ function rhyResolveParty(){
   const qsum=notes.reduce((s,n)=>s+(n.judged==="perfect"?1:n.judged==="good"?0.7:0.3),0);
   let quality=qsum/Math.max(1,notes.length);
   if(notes.length&&notes.every(n=>n.judged==="perfect")) quality*=1.1;
+  quality*=1+Math.min(0.4,(RHY.combo||0)*0.05);
   if(RHY.action==="defend"){
     const ok=notes.filter(n=>n.judged==="perfect"||n.judged==="good").length;
     ch.guard=0.45+0.15*ok; ch.pose="cast"; ch.poseT=24;
@@ -7055,7 +7057,7 @@ window.__galmuriBlit=function(ctx,s,x,y,col,sz,al){
       ctx.fillStyle=RHY.phase.indexOf("enemy")>=0
         ?("rgba(120,70,200,"+(0.03+0.05*pulse)+")")
         :("rgba(255,190,80,"+(0.03+0.05*pulse)+")");
-      ctx.fillRect(0,0,W,118);
+      if(!st.lessMotion) ctx.fillRect(0,0,W,118);
       ctx.restore();
     }
     ctx.restore();
@@ -13688,6 +13690,537 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
   }
 })();
 
+/* ===== 소리 박자 더하기: intent, note types, 맞소리, boss phase, juice ===== */
+(function(){
+  const TF=["tutHold","tutDouble","tutSync"];
+  function ensF(){ const f=st.flags||{}; TF.forEach(function(k){ if(f[k]==null) f[k]=false; }); st.flags=f; }
+  function less(){ return !!(st&&st.lessMotion); }
+  function initMotion(){
+    if(st.lessMotion!=null) return;
+    var v=null;
+    try{ v=localStorage.getItem("saebyeokjong_motion"); }catch(e){}
+    if(v==="1") st.lessMotion=true;
+    else if(v==="0") st.lessMotion=false;
+    else {
+      try{ st.lessMotion=!!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+      catch(e){ st.lessMotion=false; }
+    }
+  }
+  if(typeof st!=="undefined"){ ensF(); initMotion(); }
+  function setMotion(v){
+    st.lessMotion=!!v;
+    try{ localStorage.setItem("saebyeokjong_motion", st.lessMotion?"1":"0"); }catch(e){}
+  }
+  function chRank(){
+    const f=st.flags||{};
+    if(f.ch5||f.ch5end||f.ch4end) return 5;
+    if(f.ch4||f.ch3end) return 4;
+    if(f.ch3||f.ch2end) return 3;
+    if(f.ch2||f.ch1end) return 2;
+    return 1;
+  }
+  SPELLS.duet={id:"duet",name:"빛시위",mp:0,target:"enemy",pow:2.55,desc:"하늬와 솔이가 함께 울린다."};
+  SPELLS.chorus={id:"chorus",name:"종울림",mp:0,target:"enemy",pow:1.85,desc:"하늬와 달개가 함께 울린다."};
+  ENEMIES.echospawn={id:"echospawn",name:"남은여음",mon:"wisp",hp:10,atk:6,def:1,spd:9,xp:0,gold:0};
+
+  const CHARGE=["moss","beetle","plaque","longshade","lastfare","hushbell","boss","swallowed"];
+  const SHIELD=["moth","wisp","namemist","falseecho"];
+  const SUMMON=["echo","wight","shade","unname","swallowed"];
+  const INTENT={strike:"밀어낸다",charge:"힘을 모은다",shield:"소리를 두른다",summon:"여음을 부른다"};
+
+  function rollIntent(e){
+    if(!e||e.id==="echospawn"||e.id==="rat"){ if(e) e.intent="strike"; return; }
+    const c=chRank();
+    const opts=["strike"];
+    if(c>=1 && CHARGE.indexOf(e.id)>=0) opts.push("charge");
+    if(c>=2 && SHIELD.indexOf(e.id)>=0) opts.push("shield");
+    if(c>=2 && SUMMON.indexOf(e.id)>=0 && !(st.battle&&st.battle._summoned)) opts.push("summon");
+    if(e.boss&&e.phase2){ opts.push("charge"); if(SUMMON.indexOf(e.id)>=0) opts.push("summon"); }
+    e.intent=opts[Math.floor(Math.random()*opts.length)]||"strike";
+  }
+  function intentTxt(e){ return INTENT[e&&e.intent]||INTENT.strike; }
+  function allE(){ return (st.battle&&st.battle.enemies)||[]; }
+  function seedIntents(){ allE().forEach(function(e){ if(e.hp>0&&!e.intent) rollIntent(e); }); }
+
+  function canShine(){ return !!(st.flags&&st.flags.soli) && st.party.some(function(p){ return p.id==="haneui"&&p.hp>0; }) && st.party.some(function(p){ return p.id==="soli"&&p.hp>0; }); }
+  function canBell(){ return !!(st.flags&&st.flags.dalgae) && st.party.some(function(p){ return p.id==="haneui"&&p.hp>0; }) && st.party.some(function(p){ return p.id==="dalgae"&&p.hp>0; }); }
+  function syncReady(){ return (st.battle&&(st.battle.syncG||0)>=80) && (canShine()||canBell()); }
+  function addGauge(kind){
+    if(!st.battle) return;
+    const add=kind==="perfect"?10:kind==="good"?4:0;
+    if(add) st.battle.syncG=Math.min(100,(st.battle.syncG||0)+add);
+  }
+
+  function tagNotes(isEnemy){
+    const notes=RHY.notes; if(!notes||!notes.length) return;
+    const c=chRank();
+    const usable=notes.filter(function(n){ return !n.hush&&!n.listen&&!n.decoy&&!n._rest&&!n.typ; });
+    if(!usable.length) return;
+    const beat=(typeof rhyBeat==="function"?rhyBeat():0.5);
+    if(c>=2){
+      const n=usable[usable.length-1];
+      n.typ="hold"; n.holdDur=(st.easy?0.32:0.42)*beat*2;
+    }
+    if(c>=3 && usable.length>1){
+      const n=usable[Math.max(0,usable.length-2)];
+      if(!n.typ){ n.typ="dbl"; n._taps=0; }
+    }
+    if(c>=4){
+      usable.forEach(function(n){
+        if(n.typ) return;
+        const off=(n.hitAt-(RHY.phraseStart||0)-(RHY.countIn||0)*beat)/beat;
+        if(Math.abs(off-Math.round(off))>0.18) n.typ="sync";
+      });
+      if(!usable.some(function(n){ return n.typ==="sync"; }) && usable[0] && !usable[0].typ) usable[0].typ="sync";
+    }
+    const en=isEnemy&&battleAliveE()[0];
+    if(en&&en.phase2){
+      const last=usable[usable.length-1];
+      if(last&&!last.typ){ last.typ="hold"; last.holdDur=(st.easy?0.28:0.38)*beat*2; }
+      const extra=last?{i:notes.length,hitAt:last.hitAt+beat*(st.easy?1.1:0.85),judged:null,kind:last.kind,color:last.color,typ:c>=3?"dbl":"sync",_taps:0,_trail:[],_jt:null}:null;
+      if(extra) notes.push(extra);
+    }
+  }
+
+  function needNoteTut(){
+    const notes=RHY.notes||[];
+    if(notes.some(function(n){ return n.typ==="hold"; }) && !st.flags.tutHold) return "hold";
+    if(notes.some(function(n){ return n.typ==="dbl"; }) && !st.flags.tutDouble) return "dbl";
+    if(notes.some(function(n){ return n.typ==="sync"; }) && !st.flags.tutSync) return "sync";
+    return null;
+  }
+  const TUT={
+    hold:"이 구슬은 길게 눌러야 한다. 등불에 닿을 때 누르고, 끝까지 손을 놓지 마라.",
+    dbl:"이 구슬은 두 번 눌러야 한다. 등불에 닿을 때 두 번 두드리세요.",
+    sync:"엇박이다. 조금 이른 숨에 맞춰라."
+  };
+  const TUTFLAG={hold:"tutHold",dbl:"tutDouble",sync:"tutSync"};
+  function maybeTut(){
+    const typ=needNoteTut(); if(!typ||!st.battle) return;
+    const b=st.battle;
+    b.phase="noteTut"; b._tutTyp=typ; b._tutBack="beats";
+    b.msg=TUT[typ];
+    if(typeof syncAccessibleStatus==="function") syncAccessibleStatus();
+  }
+
+  function phaseLine(id){
+    if(id==="echo") return "닫혀 있던 여음이, 다시 열린다.";
+    if(id==="unname") return "이름이 안에서 한 번 더 운다.";
+    if(id==="hushbell") return "잠들어 있던 종이, 한쪽만 깨어난다.";
+    return "삼킨 소리가 두 줄로 밀려온다.";
+  }
+  function checkPhase(e){
+    if(!e||!e.boss||e.phase2||e.hp>e.maxHp*0.5) return;
+    e.phase2=true;
+    e.atk=Math.round((e.atk||10)*1.12);
+    const line=phaseLine(e.id);
+    const b=st.battle; if(!b) return;
+    b.msg=line; b._srPhase=line; b._hold=Math.max(b._hold||0,56);
+    if(typeof audio!=="undefined"&&audio.sfx&&audio.sfx.enc) audio.sfx.enc();
+    if(typeof syncAccessibleStatus==="function") syncAccessibleStatus();
+  }
+  function hitFlash(e){ if(e) e.flashT=less()?4:8; }
+  function doShake(a,t){ if(less()||!st.battle) return; st.battle.shakeT=t||8; st.battle.shakeA=a||1.6; }
+
+  function applyBarrier(e,dmg){
+    if(e&&e.barrier) return Math.max(1,Math.round(dmg*0.4));
+    return dmg;
+  }
+  function breakBarrier(e){
+    if(!e||!e.barrier) return;
+    e.barrier=false;
+    if(st.battle) st.battle.msg="방패가 깨졌다!";
+    doShake(1.2,6);
+  }
+
+  const _snap=snapshot;
+  snapshot=function(){
+    const d=_snap();
+    d.lessMotion=!!st.lessMotion;
+    d.flags=d.flags||{};
+    TF.forEach(function(k){ d.flags[k]=!!st.flags[k]; });
+    return d;
+  };
+  const _apply=applySnap;
+  applySnap=function(d){
+    _apply(d);
+    ensF();
+    if(d&&d.flags) TF.forEach(function(k){ if(d.flags[k]!=null) st.flags[k]=!!d.flags[k]; });
+    if(d&&d.lessMotion!=null) st.lessMotion=!!d.lessMotion;
+  };
+
+  const _sb=startBattle;
+  startBattle=function(){
+    const r=_sb.apply(this, arguments);
+    if(st.battle){ st.battle.syncG=0; st.battle._summoned=false; }
+    allE().forEach(function(e){
+      if(e.id!=="echospawn" && !e._hpScaled){
+        const mul=e.boss?1.85:2.8;
+        e.maxHp=Math.max(1,Math.round(e.maxHp*mul)); e.hp=e.maxHp; e._hpScaled=true;
+      }
+      e.phase2=false; e.barrier=false; e.intent=null; e.flashT=0; rollIntent(e);
+    });
+    return r;
+  };
+
+  const _show=rhyJudgeShow;
+  rhyJudgeShow=function(kind){
+    _show(kind);
+    addGauge(kind);
+    if(kind==="perfect"){
+      const e=(RHY.enemy&&RHY.enemy.hp>0)?RHY.enemy:battleAliveE()[0];
+      if(e&&e.barrier) breakBarrier(e);
+    }
+    if(less()&&st.battle) st.battle.shakeT=0;
+  };
+
+  const _sp=rhyStartPhrase;
+  rhyStartPhrase=function(ch, action, isEnemy){
+    _sp(ch, action, isEnemy);
+    tagNotes(isEnemy);
+    maybeTut();
+  };
+
+  const _tap=rhyTap;
+  rhyTap=function(){
+    const beating=["beats","enemy_beats","countin","enemy_countin"].indexOf(RHY.phase)>=0;
+    if(beating&&RHY.notes){
+      const open=RHY.notes.filter(function(n){ return !n.judged; });
+      if(open.length){
+        let best=open[0], bd=Math.abs(open[0].hitAt-RHY.t);
+        for(let i=0;i<open.length;i++){ const d=Math.abs(open[i].hitAt-RHY.t); if(d<bd){ best=open[i]; bd=d; } }
+        const w=rhyWin();
+        if(best.typ==="hold"&&!best._held){
+          if(bd<=w.good){ best._held=true; best._startKind=bd<=w.perfect?"perfect":"good"; return true; }
+          if(bd<=w.missTap){ rhyJudge(best,"miss"); return true; }
+        }
+        if(best.typ==="dbl"){
+          if(bd<=w.good){
+            best._taps=(best._taps||0)+1;
+            if(best._taps>=2) rhyJudge(best, bd<=w.perfect?"perfect":"good");
+            return true;
+          }
+          if(bd<=w.missTap){ rhyJudge(best,"miss"); return true; }
+        }
+      }
+    }
+    return _tap();
+  };
+
+  function tickHolds(){
+    if(!RHY.notes) return;
+    const w=rhyWin();
+    const held=typeof keys!=="undefined"&&keys.a;
+    RHY.notes.forEach(function(n){
+      if(n.judged||n.typ!=="hold") return;
+      const end=n.hitAt+(n.holdDur||0.3);
+      if(n._held && !held){
+        const dt=Math.abs(RHY.t-end);
+        const startOk=n._startKind||"good";
+        rhyJudge(n, dt<=w.perfect?startOk:(dt<=w.good?"good":"miss"));
+      } else if(!n._held && RHY.t>n.hitAt+w.good){
+        rhyJudge(n,"miss");
+      } else if(n._held && RHY.t>end+w.good){
+        rhyJudge(n,n._startKind||"good");
+      }
+    });
+    RHY.notes.forEach(function(n){
+      if(n.judged||n.typ!=="dbl") return;
+      if(RHY.t>n.hitAt+w.good) rhyJudge(n,(n._taps||0)>0?"good":"miss");
+    });
+  }
+
+  const _rp=rhyResolveParty;
+  rhyResolveParty=function(){
+    _rp();
+    const e=(RHY.enemy&&RHY.enemy.hp>0)?RHY.enemy:battleAliveE()[0];
+    if(e){ checkPhase(e); hitFlash(e); }
+    if(RHY.skill==="chorus"){
+      st.party.forEach(function(p){ if(p.hp>0) p.guard=Math.max(p.guard||0,0.42); });
+    }
+  };
+
+  const _re=rhyResolveEnemy;
+  rhyResolveEnemy=function(){
+    const en=battleAliveE()[0];
+    const intent=en&&en.intent;
+    const atk0=en&&en.atk;
+    if(en&&intent==="charge") en.atk=Math.round((en.atk||8)*1.6);
+    if(en&&intent==="shield"){ en.barrier=true; }
+    _re();
+    if(en&&atk0!=null) en.atk=atk0;
+    if(en){ hitFlash(en); rollIntent(en); }
+  };
+
+  const _be=rhyBeginEnemy;
+  rhyBeginEnemy=function(){
+    const b=st.battle;
+    if(b&&battleAliveE().length){
+      const en=battleAliveE()[0];
+      if(!en.intent) rollIntent(en);
+      if(en.intent==="summon" && !b._summoned && en.id!=="echospawn"){
+        const m=ENEMIES.echospawn;
+        b.enemies.push({id:m.id,name:m.name,mon:m.mon,hp:m.hp,maxHp:m.hp,atk:m.atk,def:m.def,spd:m.spd,xp:0,gold:0,boss:false,stun:0,pose:"idle",poseT:0,intent:"strike"});
+        b._summoned=true;
+        b.msg=josa(en.name,"이","가")+" 여음을 부른다!";
+        en.intent="strike";
+        b.phase="beats"; RHY.phase="enemy_resolve"; b._hold=36;
+        if(typeof syncAccessibleStatus==="function") syncAccessibleStatus();
+        return;
+      }
+      if(en.intent==="charge") b.msg=josa(en.name,"이","가")+" 큰 소리를 내보낸다! 받아치세요!";
+      else if(en.intent==="shield") b.msg=josa(en.name,"이","가")+" 소리를 두른다! 받아치세요!";
+      else if(en.intent==="strike") b.msg=josa(en.name,"이","가")+" 밀어낸다! 받아치세요!";
+    }
+    _be();
+  };
+
+  const _cmd=rhyCmds;
+  rhyCmds=function(ch){
+    const a=_cmd(ch);
+    if(syncReady() && a.indexOf("맞소리")<0){
+      const i=a.indexOf("기술");
+      a.splice(i>=0?i+1:1,0,"맞소리");
+    }
+    return a;
+  };
+
+  function startSync(name){
+    const b=st.battle, ch=st.party[RHY.actor];
+    if(!b||!ch) return;
+    b.syncG=0;
+    const id=name==="종울림"?"chorus":"duet";
+    const skill=SPELLS[id];
+    const enemy=battleAliveE()[0];
+    RHY.action="skill"; RHY.skill=id; RHY.enemy=enemy||null;
+    b.sub=""; b.msg=skill.name+"! 등불에 맞춰 누르세요."; b.phase="beats";
+    rhyStartPhrase(ch,"skill",false);
+  }
+
+  const _cf=rhyConfirm;
+  rhyConfirm=function(){
+    const b=st.battle, ch=st.party[RHY.actor];
+    const cmds=rhyCmds(ch);
+    const cmd=cmds[b.cmdIdx]||"";
+    if(cmd==="맞소리"){
+      if((b.syncG||0)<80){ toast("맞소리가 아직이다."); return; }
+      const opts=[];
+      if(canShine()) opts.push("빛시위");
+      if(canBell()) opts.push("종울림");
+      if(!opts.length){ toast("함께할 사람이 없다."); return; }
+      if(opts.length===1){ startSync(opts[0]); return; }
+      b.sub="syncs"; b.syncList=opts; b.syncIdx=0; b.msg="맞소리를 고르세요.";
+      return;
+    }
+    return _cf();
+  };
+
+  const _ub=updateBattle;
+  updateBattle=function(){
+    const b=st.battle;
+    if(b&&b.phase==="noteTut"){
+      if(tapped("a")||tapped("b")){
+        const typ=b._tutTyp, fl=TUTFLAG[typ];
+        if(fl) st.flags[fl]=true;
+        b.phase=b._tutBack||"beats";
+        b.msg=b.msg;
+        if(typeof audio!=="undefined"&&audio.sfx&&audio.sfx.ok) audio.sfx.ok();
+        if(typeof syncAccessibleStatus==="function") syncAccessibleStatus();
+      }
+      return;
+    }
+    if(b&&b.phase==="command"&&b.sub==="syncs"){
+      const n=(b.syncList||[]).length||1;
+      if(tapped("up")||tapped("left")){ b.syncIdx=(b.syncIdx+n-1)%n; audio.sfx.menu(); }
+      if(tapped("down")||tapped("right")){ b.syncIdx=(b.syncIdx+1)%n; audio.sfx.menu(); }
+      if(tapped("b")){ b.sub=""; b.msg="무엇을 할까요?"; return; }
+      if(tapped("a")) startSync(b.syncList[b.syncIdx]);
+      return;
+    }
+    _ub();
+    tickHolds();
+    allE().forEach(function(e){ if(e.flashT>0) e.flashT--; });
+  };
+
+  const _db=drawBattle;
+  drawBattle=function(){
+    if(st.battle&&less()) st.battle.shakeT=0;
+    _db();
+    const b=st.battle; if(!b) return;
+    /* intent labels + flash (radial, no hard bands) */
+    allE().forEach(function(e){
+      if(e.hp<=0) return;
+      const x=Number.isFinite(e._rhyX)?e._rhyX:40, y=Number.isFinite(e._rhyY)?e._rhyY:70;
+      if(e.flashT>0 && !less()){
+        ctx.save(); ctx.globalCompositeOperation="lighter";
+        const g=ctx.createRadialGradient(x,y,2,x,y,22);
+        g.addColorStop(0,"rgba(255,244,200,"+(0.45*e.flashT/8)+")");
+        g.addColorStop(1,"rgba(255,200,80,0)");
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,22,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+      }
+      if(e.barrier){
+        ctx.save(); ctx.globalCompositeOperation="lighter";
+        ctx.strokeStyle="rgba(140,210,255,0.7)"; ctx.lineWidth=1.2;
+        ctx.beginPath(); ctx.arc(x,y+4,18,0,Math.PI*2); ctx.stroke();
+        ctx.restore();
+      }
+      const lab=intentTxt(e);
+      if(lab && b.phase==="command"){
+        const tw=(typeof textWidth==="function"?textWidth(lab,9):lab.length*6);
+        if(typeof text==="function") text(lab, x, y-22, e.intent==="charge"?"#ffd080":"#d8c8f0", 9, "center");
+      }
+    });
+    /* 맞소리 gauge — stage bottom-left, away from command box */
+    const g=b.syncG||0;
+    if(st.party.length>1 && (canShine()||canBell()||g>0)){
+      const gx=6, gy=102, gw=54, gh=4;
+      if(typeof text==="function") text("맞소리", gx, gy-9, g>=80?"#ffe56a":"#d8c8a0", 8);
+      ctx.fillStyle="rgba(12,10,24,0.55)"; ctx.fillRect(gx-1,gy-1,gw+2,gh+2);
+      ctx.fillStyle="#2a2440"; ctx.fillRect(gx,gy,gw,gh);
+      ctx.fillStyle=g>=80?"#ffe56a":"#c9a24a"; ctx.fillRect(gx,gy,Math.max(0,gw*g/100),gh);
+    }
+    /* extra note marks */
+    if(RHY.notes){
+      RHY.notes.forEach(function(n){
+        if(n.judged||!n.typ) return;
+        const x=typeof rhyNoteX==="function"?rhyNoteX(n):0, y=LANE.y+LANE.h/2;
+        ctx.save();
+        if(n.typ==="hold"){
+          ctx.strokeStyle="#ffe56a"; ctx.lineWidth=2;
+          ctx.beginPath(); ctx.moveTo(x-2,y); ctx.lineTo(x+Math.max(8,(n.holdDur||0.3)*40),y); ctx.stroke();
+        } else if(n.typ==="dbl"){
+          ctx.fillStyle="#8ee0c8";
+          ctx.beginPath(); ctx.arc(x-3,y,3,0,Math.PI*2); ctx.arc(x+4,y,3,0,Math.PI*2); ctx.fill();
+        } else if(n.typ==="sync"){
+          ctx.fillStyle="#e8b0ff";
+          ctx.beginPath(); ctx.moveTo(x,y-5); ctx.lineTo(x+5,y); ctx.lineTo(x,y+5); ctx.lineTo(x-5,y); ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
+      });
+    }
+  };
+
+  const _acc=accessibleBattleStatus;
+  accessibleBattleStatus=function(){
+    var s=_acc()||"";
+    const b=st.battle;
+    if(!b) return s;
+    const parts=[];
+    if(b.phase==="noteTut") return "박자 안내, "+(b.msg||"");
+    if(b.phase==="command"&&b.sub==="syncs"){
+      const opts=b.syncList||[];
+      return "맞소리, "+(opts[b.syncIdx]||"")+", "+((b.syncIdx||0)+1)+" / "+opts.length;
+    }
+    const ens=allE().filter(function(e){ return e.hp>0; });
+    if(ens.length){
+      const intent=ens.map(function(e){ return e.name+", 다음 "+intentTxt(e); }).join(", ");
+      parts.push(intent);
+    }
+    if(RHY.lastJudge && (RHY.t-(RHY.lastJudgeT||0))<1.2){
+      const lab=RHY.lastJudge==="perfect"?"정박":RHY.lastJudge==="good"?"가깝게":"빗나감";
+      parts.push(lab+(RHY.combo>=2?", 연속 "+RHY.combo:""));
+    } else if(RHY.combo>=2){ parts.push("연속 "+RHY.combo); }
+    if((b.syncG||0)>=80 && syncReady()) parts.push("맞소리 준비");
+    if(b._srPhase) parts.push(b._srPhase);
+    if(ens.some(function(e){ return e.phase2; })) parts.push("소리가 달라졌다");
+    if(parts.length) s=(s?s+", ":"")+parts.join(", ");
+    return s;
+  };
+
+  function insertMotion(menu){
+    if(!menu||!menu.opts) return;
+    const opts=menu.opts;
+    const lab=st.lessMotion?"흔들림 켜기":"흔들림 끄기";
+    const i=opts.findIndex(function(o){ return String(o).indexOf("흔들림")===0; });
+    if(i>=0){ opts[i]=lab; return; }
+    let at=opts.indexOf("닫기");
+    if(at<0) at=opts.length;
+    opts.splice(at,0,lab);
+  }
+  const _ofm=openFieldMenu;
+  openFieldMenu=function(){
+    _ofm();
+    if(st.menu&&st.menu.kind==="root") insertMotion(st.menu);
+  };
+  const _um=updateMenu;
+  updateMenu=function(){
+    const m=st.menu;
+    if(m&&m.kind==="root"&&just.a){
+      const o=m.opts&&m.opts[m.idx];
+      if(o&&String(o).indexOf("흔들림")===0){
+        tapped("a");
+        setMotion(!st.lessMotion);
+        insertMotion(m);
+        toast(st.lessMotion?"흔들림을 끈다.":"흔들림을 켜 둔다.",70);
+        return;
+      }
+    }
+    _um();
+    if(st.menu&&st.menu.kind==="root") insertMotion(st.menu);
+  };
+
+  const _pr=typeof playRhythm==="function"?playRhythm:null;
+  if(_pr){
+    playRhythm=function(){
+      let guard=0;
+      while(st.mode==="battle"&&st.battle&&st.battle.phase!=="win"&&st.battle.phase!=="lose"&&guard++<9000){
+        const b=st.battle;
+        if(b.phase==="noteTut"){ press("a",0); press("a",1); update(); press("a",0); continue; }
+        if(b.phase==="command"){ press("a",0); press("b",0); if(b.sub==="syncs") b.sub=""; }
+        const beating=["beats","enemy_beats","countin","enemy_countin"].indexOf(RHY.phase)>=0;
+        if(beating&&RHY.notes){
+          const open=RHY.notes.filter(function(n){ return !n.judged; });
+          if(open.length){
+            const n=open[0];
+            const dt=n.hitAt-RHY.t;
+            if(n.typ==="hold"){
+              if(dt>0.02){ const steps=Math.max(1,Math.min(8,Math.floor(dt*60))); for(let i=0;i<steps;i++) update(); continue; }
+              press("a",1);
+              const end=n.hitAt+(n.holdDur||0.3);
+              while(RHY.t<end-0.01 && guard++<9000) update();
+              press("a",0); update(); continue;
+            }
+            if(n.typ==="dbl"){
+              if(dt>0.02){ const steps=Math.max(1,Math.min(8,Math.floor(dt*60))); for(let i=0;i<steps;i++) update(); continue; }
+              press("a",1); update(); press("a",0); update();
+              press("a",1); update(); press("a",0); continue;
+            }
+          }
+        }
+        /* fall through one tick of original loop by calling a single original iteration is hard; use _pr once would finish all. So handle remaining with _pr: */
+        break;
+      }
+      return _pr();
+    };
+  }
+
+  /* barrier on outgoing dmg: wrap dmgCalc slightly for enemy target during party resolve */
+  const _dmg=typeof dmgCalc==="function"?dmgCalc:null;
+  if(_dmg){
+    dmgCalc=function(atk, def, pow){
+      let v=_dmg(atk,def,pow);
+      const e=(RHY&&RHY.enemy&&RHY.enemy.hp>0)?RHY.enemy:null;
+      if(e&&e.barrier&&RHY.action!=="defend") v=applyBarrier(e,v);
+      return v;
+    };
+  }
+
+  if(window.__RPG){
+    window.__RPG.lessMotion=function(v){ if(v==null) return !!st.lessMotion; setMotion(v); };
+    window.__RPG.battleExtra=function(){
+      const b=st.battle;
+      return b&&{
+        syncG:b.syncG||0, intents:allE().map(function(e){ return {id:e.id,intent:e.intent,phase2:!!e.phase2,barrier:!!e.barrier,hp:e.hp}; }),
+        combo:RHY.combo||0, lastJudge:RHY.lastJudge, notes:(RHY.notes||[]).map(function(n){ return {typ:n.typ||"tap",judged:n.judged}; })
+      };
+    };
+    window.__RPG.forceIntent=function(id,intent){ allE().forEach(function(e){ if(!id||e.id===id) e.intent=intent; }); };
+    window.__RPG.forcePhase2=function(){ const e=battleAliveE()[0]; if(e){ e.hp=Math.floor(e.maxHp*0.49); checkPhase(e); const b=st.battle; if(b){ b.phase="beats"; RHY.phase="enemy_resolve"; b._hold=70; } } };
+    window.__RPG.fillSync=function(){ if(st.battle) st.battle.syncG=100; };
+    window.__RPG.setNoteFlag=function(k,v){ st.flags[k]=v; };
+  }
+})();
 
 })();
 })();
