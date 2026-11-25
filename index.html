@@ -4275,6 +4275,7 @@ drawBattle=function(){
   const ens=b.enemies;
   const activeEnemies=battleAliveE();
   const currentTarget=(b.sub==="enemyTarget"&&activeEnemies[b.enemyTargetIdx||0])||((RHY.enemy&&RHY.enemy.hp>0)?RHY.enemy:activeEnemies[0]);
+  const multiN=ens.length;
   ens.forEach((e,i)=>{
     const name=e.mon||e.id;
     const isEcho=(e.id==="echo"||name==="echo");
@@ -4282,7 +4283,7 @@ drawBattle=function(){
     const isHush=(e.id==="hushbell"||name==="hushbell");
     const isLong=(e.id==="longshade"||name==="longshade");
     const isFinal=e.id==="boss";
-    let x=8+i*50, y=isFinal?28:50;
+    let x=multiN>=3?(4+i*38):(multiN===2?(4+i*68):8), y=isFinal?28:50;
     const sc=isFinal?1.15:1.35;
     let dw=(isFinal?70:40)*sc/1.3, dh=dw;
     const pose=e.poseT>0?(e.pose||"idle"):"idle";
@@ -4305,23 +4306,23 @@ drawBattle=function(){
       y=(e.hp<=0?115:113+bob)-dh;
     }
     if(isLong){
-      dw=62; dh=100;
-      x=10;
+      dw=54; dh=88;
+      x=multiN>=2?(4+i*66):10;
       const bob=e.hp<=0?0:Math.sin(st.tick*0.10)*1.4;
-      y=(e.hp<=0?112:110+bob)-dh;
+      y=(e.hp<=0?112:112+bob)-dh;
     }
     const isFare=(e.id==="lastfare"||name==="lastfare");
     const isMist=(e.id==="namemist"||name==="namemist");
     const isSwallow=(e.id==="swallowed"||name==="swallowed");
     if(isFare){
       dw=62; dh=108;
-      x=10;
+      x=multiN>=2?(4+i*66):10;
       const bob=e.hp<=0?0:Math.sin(st.tick*0.08)*0.5;
       y=(e.hp<=0?115:115+bob)-dh;
     }
     if(isMist){
       dw=62; dh=108;
-      x=10;
+      x=multiN>=2?(4+i*66):10;
       const bob=e.hp<=0?0:Math.sin(st.tick*0.09)*1.6;
       y=(e.hp<=0?112:110+bob)-dh;
     }
@@ -4330,6 +4331,11 @@ drawBattle=function(){
       x=8;
       const bob=e.hp<=0?0:Math.sin(st.tick*0.07)*1.6;
       y=(e.hp<=0?115:115+bob)-dh;
+    }
+    if(multiN>=2){
+      if(dw>56){ const r=54/dw; dw=54; dh=Math.round(dh*r); y=(e.hp<=0?113:113)-dh; }
+      const slotW=Math.floor(118/multiN);
+      x=Math.max(4, Math.min(4+i*slotW+Math.max(0,Math.floor((slotW-dw)/2)), 122-dw));
     }
     const noLunge=isEcho||isUnname||isHush||isLong||isFare||isMist||isSwallow;
     if(hdReady) hdBlit("mons", name==="boss"?"boss":name, x+(pose==="attack"&&!noLunge?6:0), y, {w:dw, h:dh, alpha:e.hp<=0?0.3:1});
@@ -13754,6 +13760,28 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
 
   function tagNotes(isEnemy){
     const notes=RHY.notes; if(!notes||!notes.length) return;
+    if(st.battle && st.battle._practice && !isEnemy){
+      const usableP=notes.filter(function(n){ return !n.hush&&!n.listen&&!n.decoy&&!n._rest; });
+      const beat=(typeof rhyBeat==="function"?rhyBeat():0.5);
+      const pm=st.battle._practiceMode||"all";
+      const seq=["tap","hold","dbl","sync"];
+      const kind=pm==="all"?seq[(st.battle._pracTurn||0)%4]:pm;
+      st.battle._pracKind=kind;
+      if(kind==="hold"){
+        usableP.forEach(function(n,idx){ if(idx===usableP.length-1||idx===0){ n.typ="hold"; n.holdDur=(st.easy?0.30:0.38)*beat*2; } });
+        st.battle.msg="길게 누르기 연습. 끝까지 누른다.";
+      } else if(kind==="dbl"){
+        usableP.forEach(function(n,idx){ if(idx===usableP.length-1||idx===0){ n.typ="dbl"; n._taps=0; } });
+        st.battle.msg="두 번 누르기 연습. 두 번 두드린다.";
+      } else if(kind==="sync"){
+        usableP.forEach(function(n,idx){ if(idx===1||idx===usableP.length-1){ n.hitAt+=beat*0.42; n.typ="sync"; } });
+        st.battle.msg="엇박 맞추기 연습. 이른 숨에 맞춰라.";
+      } else {
+        st.battle.msg="기본 두드리기 연습.";
+      }
+      st.battle._pracTurn=(st.battle._pracTurn||0)+1;
+      return;
+    }
     const c=chRank();
     const usable=notes.filter(function(n){ return !n.hush&&!n.listen&&!n.decoy&&!n._rest&&!n.typ; });
     if(!usable.length) return;
@@ -13784,6 +13812,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
   }
 
   function needNoteTut(){
+    if(st.battle && st.battle._practice) return null;
     const notes=RHY.notes||[];
     if(notes.some(function(n){ return n.typ==="hold"; }) && !st.flags.tutHold) return "hold";
     if(notes.some(function(n){ return n.typ==="dbl"; }) && !st.flags.tutDouble) return "dbl";
@@ -13858,6 +13887,8 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
       if(e.id!=="echospawn" && !e._hpScaled){
         var mul=e.boss?2.45:2.8;
         if(e.id==="moss"||e.id==="moth") mul=4.6;
+        if(e.id==="hushbell") mul=2.85;
+        if(e.id==="swallowed") mul=2.05;
         if(st.easy) mul*=0.8;
         e.maxHp=Math.max(1,Math.round(e.maxHp*mul)); e.hp=e.maxHp; e._hpScaled=true;
       }
@@ -13866,10 +13897,18 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     return r;
   };
 
+  const _win=rhyWin;
+  rhyWin=function(){
+    const w=_win();
+    if(st.easy){ w.perfect=Math.max(w.perfect,0.22); w.good=Math.max(w.good,0.38); w.missTap=w.good+0.12; }
+    return w;
+  };
+
   const _show=rhyJudgeShow;
   rhyJudgeShow=function(kind){
     _show(kind);
     addGauge(kind);
+    if(st.battle) st.battle._maxCombo=Math.max(st.battle._maxCombo||0, RHY.combo||0);
     if(kind==="perfect"){
       const e=(RHY.enemy&&RHY.enemy.hp>0)?RHY.enemy:battleAliveE()[0];
       if(e&&e.barrier) breakBarrier(e);
@@ -13894,16 +13933,24 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
         for(let i=0;i<open.length;i++){ const d=Math.abs(open[i].hitAt-RHY.t); if(d<bd){ best=open[i]; bd=d; } }
         const w=rhyWin();
         if(best.typ==="hold"&&!best._held){
-          if(bd<=w.good){ best._held=true; best._startKind=bd<=w.perfect?"perfect":"good"; return true; }
-          if(bd<=w.missTap){ rhyJudge(best,"miss"); return true; }
+          const hGood=w.good+(st.easy?0.06:0.04);
+          if(bd<=hGood){ best._held=true; best._startKind=bd<=w.perfect?"perfect":"good"; return true; }
+          if(bd<=w.missTap+0.04){ rhyJudge(best,"miss"); return true; }
         }
         if(best.typ==="dbl"){
-          if(bd<=w.good){
+          const dWin=w.good+((best._taps||0)>0?(st.easy?0.22:0.15):(st.easy?0.06:0.03));
+          if(bd<=dWin){
             best._taps=(best._taps||0)+1;
-            if(best._taps>=2) rhyJudge(best, bd<=w.perfect?"perfect":"good");
+            if(best._taps>=2) rhyJudge(best, bd<=w.perfect+0.06?"perfect":"good");
             return true;
           }
-          if(bd<=w.missTap){ rhyJudge(best,"miss"); return true; }
+          if(bd<=w.missTap+0.05){ rhyJudge(best,"miss"); return true; }
+        }
+        if(best.typ==="sync"){
+          const sp=st.easy?0.06:0.04;
+          if(bd<=w.perfect+sp){ rhyJudge(best,"perfect"); return true; }
+          if(bd<=w.good+sp+0.02){ rhyJudge(best,"good"); return true; }
+          if(bd<=w.missTap+sp){ rhyJudge(best,"miss"); return true; }
         }
       }
     }
@@ -13914,22 +13961,27 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     if(!RHY.notes) return;
     const w=rhyWin();
     const held=typeof keys!=="undefined"&&keys.a;
+    const relGood=w.good+(st.easy?0.14:0.09);
+    const relPerf=w.perfect+(st.easy?0.08:0.04);
     RHY.notes.forEach(function(n){
       if(n.judged||n.typ!=="hold") return;
       const end=n.hitAt+(n.holdDur||0.3);
       if(n._held && !held){
         const dt=Math.abs(RHY.t-end);
         const startOk=n._startKind||"good";
-        rhyJudge(n, dt<=w.perfect?startOk:(dt<=w.good?"good":"miss"));
-      } else if(!n._held && RHY.t>n.hitAt+w.good){
+        if(RHY.t>=end-relGood) rhyJudge(n, dt<=relPerf?startOk:"good");
+        else if(RHY.t>=n.hitAt+(n.holdDur||0.3)*0.45) rhyJudge(n,"good");
+        else rhyJudge(n,"miss");
+      } else if(!n._held && RHY.t>n.hitAt+w.good+(st.easy?0.06:0.03)){
         rhyJudge(n,"miss");
-      } else if(n._held && RHY.t>end+w.good){
+      } else if(n._held && RHY.t>end+relPerf*0.5){
         rhyJudge(n,n._startKind||"good");
       }
     });
     RHY.notes.forEach(function(n){
       if(n.judged||n.typ!=="dbl") return;
-      if(RHY.t>n.hitAt+w.good) rhyJudge(n,(n._taps||0)>0?"good":"miss");
+      const dblWait=w.good+((n._taps||0)>0?(st.easy?0.22:0.15):(st.easy?0.06:0.03));
+      if(RHY.t>n.hitAt+dblWait) rhyJudge(n,(n._taps||0)>0?"good":"miss");
     });
   }
 
@@ -13943,14 +13995,31 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     }
   };
 
+  function endPractice(){
+    const b=st.battle, sv=b&&b._pracSave;
+    if(sv){
+      st.party.forEach(function(p,idx){ if(sv.party[idx]){ p.hp=sv.party[idx].hp; p.mp=sv.party[idx].mp; } });
+      TF.forEach(function(k){ st.flags[k]=sv.flags[k]; });
+    }
+    st.battle=null; RHY.phase="idle"; RHY.tutStep=0;
+    if(typeof musicForMap==="function") musicForMap();
+    st.mode="play";
+    toast("박자 연습을 마쳤다.", 65);
+  }
+
   const _re=rhyResolveEnemy;
   rhyResolveEnemy=function(){
+    const b=st.battle;
     const en=battleAliveE()[0];
     const intent=en&&en.intent;
     const atk0=en&&en.atk;
     if(en&&intent==="charge") en.atk=Math.round((en.atk||8)*1.6);
     if(en&&intent==="shield"){ en.barrier=true; }
     _re();
+    if(b&&b._practice){
+      st.party.forEach(function(p){ if(p.hp<1) p.hp=1; });
+      if(en&&en.hp<Math.floor(en.maxHp*0.3)) en.hp=en.maxHp;
+    }
     if(en&&atk0!=null) en.atk=atk0;
     if(en){ hitFlash(en); rollIntent(en); }
   };
@@ -13958,6 +14027,10 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
   const _be=rhyBeginEnemy;
   rhyBeginEnemy=function(){
     const b=st.battle;
+    if(b&&b._practice){
+      b.phase="beats"; b.msg="다시 네 차례다. 연습하거나 도망으로 나간다.";
+      RHY.phase="enemy_resolve"; b._hold=28; return;
+    }
     if(b&&battleAliveE().length){
       const en=battleAliveE()[0];
       if(!en.intent) rollIntent(en);
@@ -13980,6 +14053,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
 
   const _cmd=rhyCmds;
   rhyCmds=function(ch){
+    if(st.battle && st.battle._practice) return ["공격","방어","도망"];
     const a=_cmd(ch);
     if(syncReady() && a.indexOf("맞소리")<0){
       const i=a.indexOf("기술");
@@ -13991,7 +14065,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
   function startSync(name){
     const b=st.battle, ch=st.party[RHY.actor];
     if(!b||!ch) return;
-    b.syncG=0;
+    b.syncG=0; b._syncUsed=(b._syncUsed||0)+1;
     const id=name==="종울림"?"chorus":"duet";
     const skill=SPELLS[id];
     const enemy=battleAliveE()[0];
@@ -14005,6 +14079,10 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     const b=st.battle, ch=st.party[RHY.actor];
     const cmds=rhyCmds(ch);
     const cmd=cmds[b.cmdIdx]||"";
+    if(b&&b._practice&&cmd==="도망"){
+      if(typeof audio!=="undefined"&&audio.sfx&&audio.sfx.ok) audio.sfx.ok();
+      endPractice(); return;
+    }
     if(cmd==="맞소리"){
       if((b.syncG||0)<80){ toast("맞소리가 아직이다."); return; }
       const opts=[];
@@ -14092,7 +14170,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
       }
       ctx.fill();
     }
-    if(b.phase==="command"){
+    if(b.phase==="command" && !b._practice){
       const margin=6, bh=12, stageH=118, stageW=(typeof W==="number"?W:192);
       const boxes=[];
       allE().forEach(function(e){
@@ -14106,6 +14184,8 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
         const cx=Number.isFinite(e._rhyX)?e._rhyX:40;
         const top=Number.isFinite(e._rhyTop)?e._rhyTop:(Number.isFinite(e._rhyY)?e._rhyY-22:48);
         let bx=Math.round(cx-tw/2), by=Math.round(top-bh-2);
+        if(top<16) by=14;
+        if(e.id==="wight"||e.mon==="longshade") by=Math.max(10, Math.round(top-bh+2));
         if(bx<margin) bx=margin;
         if(bx+tw>stageW-margin) bx=stageW-margin-tw;
         if(by<margin) by=margin;
@@ -14115,52 +14195,47 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
       boxes.sort(function(a,b){ return a.bx-b.bx; });
       for(let i=1;i<boxes.length;i++){
         const prev=boxes[i-1], cur=boxes[i];
-        if(cur.bx<prev.bx+prev.tw+3 && Math.abs(cur.by-prev.by)<bh+2){
-          cur.bx=prev.bx+prev.tw+3;
+        if(cur.bx<prev.bx+prev.tw+4 && Math.abs(cur.by-prev.by)<bh+2){
+          cur.bx=prev.bx+prev.tw+4;
           if(cur.bx+cur.tw>stageW-margin){
             cur.bx=stageW-margin-cur.tw;
-            prev.bx=Math.max(margin, cur.bx-prev.tw-3);
+            cur.by=Math.min(stageH-16-bh, prev.by+bh+3);
           }
         }
       }
       boxes.forEach(function(box){
-        pill(box.bx, box.by, box.tw, box.bh, "rgba(10,12,28,0.84)");
+        pill(box.bx, box.by, box.tw, box.bh, "rgba(10,12,28,0.86)");
         const col=box.e.intent==="charge"?"#ffd080":box.e.intent==="shield"?"#a8e0ff":box.e.intent==="summon"?"#e0c8ff":"#d8c8f0";
         if(typeof text==="function") text(box.lab, box.bx+box.tw/2, box.by+1, col, 9, "center");
       });
     }
-    /* 맞소리 gauge — mid-bottom of the stage, not over commands */
+    if(b._practice){
+      pill(6,6,34,12,"rgba(10,12,28,0.86)");
+      if(typeof text==="function") text("연습",23,7,"#ffe56a",9,"center");
+    }
+    /* 맞소리 gauge — top-right sky, clear of shadows and sprites */
     const g=b.syncG||0;
-    if(st.party.length>1 && (canShine()||canBell()||g>0)){
+    if(!b._practice && st.party.length>1 && (canShine()||canBell()||g>0)){
       const lab="맞소리";
-      const lw=Math.ceil((typeof textWidth==="function"?textWidth(lab,9):28))+2;
-      const gw=70, gh=7, gap=4;
-      const pw=lw+gap+gw+8, ph=14;
-      const gx=58, gy=105;
+      var lw=0;
+      try{ if(window.__RPG&&typeof window.__RPG.measurePx==="function") lw=Math.ceil(window.__RPG.measurePx(lab,9)); }catch(err){}
+      if(!(lw>0)) lw=28;
+      const gw=46, gh=7, gap=4;
+      const pw=lw+gap+gw+9, ph=14;
+      const gy=st.easy?16:5;
       const stageW=(typeof W==="number"?W:192);
-      const px=Math.max(4, Math.min(gx, stageW-4-pw));
-      pill(px, gy, pw, ph, "rgba(10,12,28,0.82)");
+      const px=Math.max(4, stageW-4-pw);
+      pill(px, gy, pw, ph, "rgba(10,12,28,0.84)");
       if(typeof text==="function") text(lab, px+4, gy+2, g>=80?"#ffe56a":"#e8d8b0", 9);
       const bx=px+4+lw+gap, by=gy+3;
       pill(bx, by, gw, gh, "#1a1630");
       const fw=Math.max(0, Math.floor(gw*g/100));
       if(fw>0){
-        ctx.save();
-        ctx.beginPath();
-        const r=Math.min(3,gh/2);
-        if(ctx.roundRect) ctx.roundRect(bx,by,fw,gh,r);
-        else { ctx.rect(bx,by,fw,gh); }
-        ctx.clip();
         ctx.fillStyle=g>=80?"#ffe56a":"#c9a24a";
+        ctx.beginPath();
+        if(ctx.roundRect) ctx.roundRect(bx,by,fw,gh,Math.min(3,gh/2));
+        else ctx.rect(bx,by,fw,gh);
         ctx.fill();
-        ctx.restore();
-        if(fw>=2){
-          ctx.fillStyle=g>=80?"#ffe56a":"#c9a24a";
-          ctx.beginPath();
-          if(ctx.roundRect) ctx.roundRect(bx,by,fw,gh,Math.min(3,gh/2));
-          else ctx.rect(bx,by,fw,gh);
-          ctx.fill();
-        }
       }
     }
     /* extra note marks */
@@ -14211,9 +14286,54 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     return s;
   };
 
+  const _bw=typeof beginWin==="function"?beginWin:null;
+  if(_bw){
+    beginWin=function(){
+      _bw();
+      const b=st.battle;
+      if(b&&b._practice){ endPractice(); return; }
+      if(b&&b.rStats&&b.winLines){
+        const s=b.rStats, parts=[];
+        if(s.miss===0&&s.perfect>0) parts.push("고운 박자!");
+        if((b._maxCombo||0)>=2) parts.push("연속 기록 "+b._maxCombo);
+        if((b._syncUsed||0)>0) parts.push("맞소리 "+b._syncUsed);
+        if(parts.length) b.winLines.splice(Math.min(2,b.winLines.length),0,parts.join("  ·  "));
+        b.winI=0; b.msg=b.winLines[0];
+      }
+    };
+  }
+
+  function startPractice(mode){
+    const sv={
+      party:st.party.map(function(p){ return {hp:p.hp, mp:p.mp}; }),
+      flags:{}
+    };
+    TF.forEach(function(k){ sv.flags[k]=!!st.flags[k]; });
+    st.menu=null;
+    startBattle(["moss"], false, false);
+    const b=st.battle;
+    if(!b) return;
+    b._practice=true; b._practiceMode=mode||"all"; b._pracTurn=0; b._pracSave=sv;
+    b.phase="command"; b.syncG=0;
+    const e=b.enemies&&b.enemies[0];
+    if(e){ e.name="연습 바위"; e.hp=999; e.maxHp=999; e.atk=3; e.xp=0; e.gold=0; e.intent="strike"; }
+    b.msg="고른 박자를 연습한다. 끝내려면 도망.";
+    if(typeof syncAccessibleStatus==="function") syncAccessibleStatus();
+  }
+  const PRAC_MODES=["all","tap","hold","dbl","sync"];
+  function openPracticeMenu(){
+    st.menu={kind:"practice", idx:0, opts:["모두 차례로","기본 두드리기","길게 누르기","두 번 누르기","엇박 맞추기","돌아가기"]};
+    if(typeof audio!=="undefined"&&audio.sfx&&audio.sfx.menu) audio.sfx.menu();
+    if(typeof syncAccessibleStatus==="function") syncAccessibleStatus();
+  }
   function insertMotion(menu){
     if(!menu||!menu.opts) return;
     const opts=menu.opts;
+    let pi=opts.indexOf("박자 연습");
+    if(pi<0){
+      let at0=opts.indexOf("닫기"); if(at0<0) at0=opts.length;
+      opts.splice(at0,0,"박자 연습");
+    }
     const lab=st.lessMotion?"흔들림 켜기":"흔들림 끄기";
     const i=opts.findIndex(function(o){ return String(o).indexOf("흔들림")===0; });
     if(i>=0){ opts[i]=lab; return; }
@@ -14229,8 +14349,20 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
   const _um=updateMenu;
   updateMenu=function(){
     const m=st.menu;
+    if(m&&m.kind==="practice"){
+      const n=(m.opts||[]).length||1;
+      if(tapped("up")){ m.idx=(m.idx+n-1)%n; audio.sfx.menu(); if(typeof syncAccessibleStatus==="function") syncAccessibleStatus(); }
+      if(tapped("down")){ m.idx=(m.idx+1)%n; audio.sfx.menu(); if(typeof syncAccessibleStatus==="function") syncAccessibleStatus(); }
+      if(tapped("b")){ openFieldMenu(); return; }
+      if(tapped("a")){
+        if(m.idx>=PRAC_MODES.length){ openFieldMenu(); return; }
+        startPractice(PRAC_MODES[m.idx]); return;
+      }
+      return;
+    }
     if(m&&m.kind==="root"&&just.a){
       const o=m.opts&&m.opts[m.idx];
+      if(o==="박자 연습"){ tapped("a"); openPracticeMenu(); return; }
       if(o&&String(o).indexOf("흔들림")===0){
         tapped("a");
         setMotion(!st.lessMotion);
@@ -14242,6 +14374,37 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     _um();
     if(st.menu&&st.menu.kind==="root") insertMotion(st.menu);
   };
+  const _dm2=typeof drawMenu==="function"?drawMenu:null;
+  if(_dm2){
+    drawMenu=function(){
+      const m=st.menu;
+      if(m&&m.kind==="practice"){
+        const opts=m.opts||[], n=Math.max(1,opts.length);
+        win(12, 26, 168, 52+n*17);
+        text("박자 연습", 20, 32, (typeof COL!=="undefined"&&COL.gold)||"#e8c86a", 11);
+        text("체력은 줄지 않는다.", 20, 47, (typeof COL!=="undefined"&&COL.dim)||"#b8c0d4", 8);
+        opts.forEach(function(o,i){
+          const y=62+i*17;
+          if(i===m.idx&&typeof highlightBar==="function") highlightBar(16,y-2,160,15);
+          text((i===m.idx?"▶ ":"  ")+o, 20, y, i===m.idx?((typeof COL!=="undefined"&&COL.gold)||"#e8c86a"):((typeof COL!=="undefined"&&COL.tx)||"#f4efe0"), 10);
+        });
+        text("A 시작  ·  B 돌아가기", 20, 64+n*17, (typeof COL!=="undefined"&&COL.dim)||"#b8c0d4", 8);
+        return;
+      }
+      _dm2();
+    };
+  }
+  const _ams=typeof accessibleMenuStatus==="function"?accessibleMenuStatus:null;
+  if(_ams){
+    accessibleMenuStatus=function(){
+      const m=st.menu;
+      if(m&&m.kind==="practice"){
+        const opts=m.opts||[];
+        return "박자 연습, "+(opts[m.idx]||"")+", "+((m.idx||0)+1)+" / "+opts.length;
+      }
+      return _ams();
+    };
+  }
 
   const _pr=typeof playRhythm==="function"?playRhythm:null;
   if(_pr){
@@ -14302,6 +14465,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     window.__RPG.forcePhase2=function(){ const e=battleAliveE()[0]; if(e){ e.hp=Math.floor(e.maxHp*0.49); checkPhase(e); const b=st.battle; if(b){ b.phase="beats"; RHY.phase="enemy_resolve"; b._hold=70; } } };
     window.__RPG.fillSync=function(){ if(st.battle) st.battle.syncG=100; };
     window.__RPG.setNoteFlag=function(k,v){ st.flags[k]=v; };
+    window.__RPG.startPractice=function(mode){ startPractice(mode||"all"); };
   }
 })();
 
