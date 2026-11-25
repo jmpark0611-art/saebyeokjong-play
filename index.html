@@ -260,7 +260,7 @@ const EQUIPS={
   staff1:{id:"staff1",name:"단단한봉",slot:"weapon",atk:7,who:["haneui"],price:60,desc:"잘 다듬은 단단한 나무봉."},
   bow0:{id:"bow0",name:"짧은활",slot:"weapon",atk:4,who:["soli"],price:0,desc:"솔이의 사냥용 짧은 활."},
   bow1:{id:"bow1",name:"바람활",slot:"weapon",atk:8,who:["soli"],price:80,desc:"시위에 바람이 실리는 활."},
-  ham0:{id:"ham0",name:"청동방망",slot:"weapon",atk:5,who:["dalgae"],price:0,desc:"달개의 묵직한 방망이."},
+  ham0:{id:"ham0",name:"청동망치",slot:"weapon",atk:5,who:["dalgae"],price:0,desc:"달개의 묵직한 망치."},
   ham1:{id:"ham1",name:"쇠망치",slot:"weapon",atk:9,who:["dalgae"],price:100,desc:"성문에서 쓰던 쇠망치."},
   cloak0:{id:"cloak0",name:"여행겉옷",slot:"armor",def:2,who:["haneui","soli","dalgae"],price:0,desc:"길을 걷기 위한 겉옷."},
   cloak1:{id:"cloak1",name:"가죽조끼",slot:"armor",def:5,who:["haneui","soli","dalgae"],price:50,desc:"가벼운 가죽 조끼."},
@@ -3239,7 +3239,7 @@ function setEasy(v){
 /* ---- map updates: field encounters, cave puzzle, soli/dalgae placement ---- */
 ENEMIES.rat.hp=20; ENEMIES.rat.atk=5; ENEMIES.rat.xp=14; ENEMIES.rat.gold=6;
 ENEMIES.beetle.hp=34; ENEMIES.beetle.atk=8; ENEMIES.beetle.xp=22; ENEMIES.beetle.gold=12;
-ENEMIES.boss.hp=136; ENEMIES.boss.atk=12; ENEMIES.boss.xp=90; ENEMIES.boss.gold=80;
+ENEMIES.boss.hp=120; ENEMIES.boss.atk=12; ENEMIES.boss.xp=90; ENEMIES.boss.gold=80;
 
 MAPS.world.encounters=["rat","rat","beetle"];
 MAPS.world.encRate=16;
@@ -3317,9 +3317,9 @@ talkSpecial=function(kind){
     if(!st.flags.elder){
       st.flags.elder=true;
       startDialog([
-        "촌장: 하늬로구나. 노을성의 큰 종이 사흘째 울리지 않아, 저녁이 떠나지 못하고 있다.",
-        "촌장: 네게 그 여음이 들린다면 부탁하마. 동쪽 숨은굴에서 종혀 조각을 찾아 다오.",
-        "촌장: 마을 가게에서 약초를 사고, 종각에 기록을 맡긴 뒤 남쪽 들판으로 나가 보렴.",
+        "촌장: 하늬로구나. 노을성 큰 종이 사흘째 멈춰, 저녁이 걷히질 않는다.",
+        "촌장: 그 여음이 들린다면, 동쪽 숨은굴에서 종혀 조각을 찾아 다오.",
+        "촌장: 약초를 사고 종각에 기록을 맡긴 뒤, 남쪽 들판으로 나가 보렴.",
         "촌장: 그늘이 들끓으니 조심하거라."
       ]);
     } else if(st.flags.ch1end){
@@ -3491,9 +3491,19 @@ interact=function(){
   _interact();
 };
 
-/* ---- soft drifting mist wisps (no hard fillRect bands) ---- */
+/* ---- soft drifting mist wisps (cached sprite, no hard fillRect bands) ---- */
+let _wispCan=null;
 function drawPixelFog(t, a){
   a=a==null?0.16:a;
+  if(!_wispCan){
+    _wispCan=document.createElement("canvas"); _wispCan.width=64; _wispCan.height=64;
+    const wg=_wispCan.getContext("2d");
+    const g=wg.createRadialGradient(32,32,0,32,32,32);
+    g.addColorStop(0,"rgba(210,198,230,1)");
+    g.addColorStop(0.42,"rgba(200,188,220,0.42)");
+    g.addColorStop(1,"rgba(180,170,200,0)");
+    wg.fillStyle=g; wg.fillRect(0,0,64,64);
+  }
   ctx.save();
   const wisps=11;
   for(let i=0;i<wisps;i++){
@@ -3503,20 +3513,9 @@ function drawPixelFog(t, a){
     const rx=16+(i*11+7)%24;
     const ry=4+(i*3+2)%7;
     let al=a*(0.20+0.14*((i*2)%3))*(0.8+0.2*Math.sin(t*0.018+i*2.1));
-    // keep title/subtitle readable
     if(y<52) al*=Math.max(0.2,(y-6)/46);
-    ctx.save();
-    ctx.translate(x,y);
-    ctx.scale(1,ry/rx);
-    const g=ctx.createRadialGradient(0,0,0,0,0,rx);
-    g.addColorStop(0,"rgba(210,198,230,"+al+")");
-    g.addColorStop(0.42,"rgba(200,188,220,"+(al*0.42)+")");
-    g.addColorStop(1,"rgba(180,170,200,0)");
-    ctx.fillStyle=g;
-    ctx.beginPath();
-    ctx.arc(0,0,rx,0,Math.PI*2);
-    ctx.fill();
-    ctx.restore();
+    ctx.globalAlpha=al;
+    ctx.drawImage(_wispCan, x-rx, y-ry, rx*2, ry*2);
   }
   ctx.restore();
 }
@@ -7191,7 +7190,7 @@ window.__galmuriBlit=function(ctx,s,x,y,col,sz,al){
     const gx=x+12;
     const num=hp+"/"+maxHp;
     const numW=((typeof textWidth==="function")?Math.ceil(textWidth(num,8)):(String(num).length*6))+6;
-    const gw=Math.max(24, (colR-numW)-gx);
+    const gw=Math.max(10, (colR-numW)-gx);
     gauge(gx, y+14, gw, 5, hp/Math.max(1,maxHp), "hp");
     text(num, colR, y+12, COL.tx, 8, "right");
   }
@@ -7862,6 +7861,17 @@ window.__MAPHD={
         const name=tileSprite(m,c,tx,ty);
         const dx=Math.round(tx*TW-cx), dy=Math.round(ty*TW-cy);
         if(c==="+" && window.__x9gate) continue;
+        if(c==="Y"||c==="y"){
+          const on=name==="lamp";
+          ctx.save();
+          ctx.fillStyle="rgba(8,6,14,0.42)"; ctx.beginPath(); ctx.ellipse(dx+16,dy+28,7,3,0,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle="#3a3244"; ctx.fillRect(dx+15,dy+14,2,14); ctx.fillRect(dx+13,dy+26,6,2);
+          ctx.fillStyle="#241c2c"; ctx.fillRect(dx+11,dy+6,10,9);
+          ctx.fillStyle=on?"#ffd878":"#4c445c"; ctx.fillRect(dx+13,dy+8,6,5);
+          ctx.fillStyle="#524662"; ctx.fillRect(dx+10,dy+5,12,2); ctx.fillRect(dx+14,dy+3,4,2);
+          ctx.restore();
+          continue;
+        }
         if(window.__x9blit && c!=="+") window.__x9blit(name, dx, dy, 32, 32);
         else if(typeof blit32==="function") blit32(name, dx, dy, 32, 32);
       }
@@ -7894,12 +7904,14 @@ window.__MAPHD={
   function lightPools(m, cx, cy, TW, tick){
     const typ=m.typ;
     const glows=[];
-    const tw=m.w, th=m.h;
-    for(let y=0;y<th;y++){
-      for(let x=0;x<tw;x++){
+    const tx0=Math.max(0,Math.floor(cx/TW)-1), ty0=Math.max(0,Math.floor(cy/TW)-1);
+    const tx1=Math.min(m.w-1,tx0+Math.ceil(384/TW)+3), ty1=Math.min(m.h-1,ty0+Math.ceil(576/TW)+3);
+    for(let y=ty0;y<=ty1;y++){
+      for(let x=tx0;x<=tx1;x++){
         const c=tileCh(m,x,y);
         const name=tileSprite(m,c,x,y);
         const dx=x*TW-cx, dy=y*TW-cy;
+        if(dx<-56||dy<-56||dx>440||dy>632) continue;
         if(name==="lamp"||name==="lantern_int"||name==="wall_win"||(name&&String(name).indexOf("iwall_win")===0)||name==="door"||name==="hearth"||name==="incense"||name==="bell"||name==="bell_in"){
           const isFire=name==="hearth"||name==="incense";
           const isLamp=name==="lamp"||name==="lantern_int";
@@ -8725,7 +8737,7 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
     if(f.ch3) return f.ch3gate?"낮은 회랑 안쪽으로 가자":"위패 차례를 풀자 ("+objectiveCount(f.ch3names,3)+"/3)";
     if(f.ch2) return f.ch2gate?"노을성 종루로 올라가자":"작은 종을 깨우자 ("+objectiveCount(f.ch2bells,4)+"/4)";
     if(!f.elder) return "촌장의 집을 찾아가 보자";
-    if(!f.soli) return "동쪽 길로 나가 보자";
+    if(!f.soli) return st.mapId==="world"?"동쪽 길의 솔이를 만나자":"남쪽 들판으로 나가 보자";
     if(!f.gateOpen) return "굴의 등불을 켜자 ("+objectiveCount(f.lamps,3)+"/3)";
     if(!f.shard) return "숨은굴에서 종혀 조각을 찾자";
     if(!f.dalgae) return "숨은굴 안쪽에서 달개를 만나자";
@@ -8852,12 +8864,12 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
     }
     if(m && m.kind==="root"){
       const n=m.opts.length;
-      const mh=14+n*18+8;
-      win(74, 36, 114, mh);
+      const mh=10+n*15+6;
+      win(74, 38, 114, mh);
       m.opts.forEach(function(o,i){
-        const y=46+i*18;
+        const y=45+i*15;
         if(i===m.idx){
-          highlightBar(78, y-2, 106, 16);
+          highlightBar(78, y-1, 106, 14);
           drawCursor(76, y);
           text(o, 90, y, COL.gold, 11, "left", "name");
         } else {
@@ -9039,7 +9051,6 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
   ],{
     start:[4,6],
     warps:[
-      {x:3,y:7,to:"town",tx:11,ty:6,dir:"down"},
       {x:4,y:7,to:"town",tx:11,ty:6,dir:"down"},
       {x:5,y:7,to:"town",tx:11,ty:6,dir:"down"}
     ],
@@ -9059,10 +9070,10 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
   ],{
     start:[5,7],
     warps:[
-      {x:4,y:8,to:"town",tx:16,ty:6,dir:"down"},
-      {x:5,y:8,to:"town",tx:16,ty:6,dir:"down"}
+      {x:5,y:8,to:"town",tx:16,ty:6,dir:"down"},
+      {x:6,y:8,to:"town",tx:16,ty:6,dir:"down"}
     ],
-    npcs:[{id:"inn",x:8,y:2,spr:"woman",name:"여관 주인",talk:"inn"}]
+    npcs:[{id:"inn",x:8,y:4,spr:"woman",name:"여관 주인",talk:"inn"}]
   });
   MAPS.wshop=M("interior","풀무간",[
     "`````````",
@@ -9077,10 +9088,10 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
   ],{
     start:[4,6],
     warps:[
-      {x:3,y:7,to:"town",tx:11,ty:10,dir:"down"},
-      {x:4,y:7,to:"town",tx:11,ty:10,dir:"down"}
+      {x:4,y:7,to:"town",tx:11,ty:10,dir:"down"},
+      {x:5,y:7,to:"town",tx:11,ty:10,dir:"down"}
     ],
-    npcs:[{id:"wshop",x:6,y:2,spr:"shopkeep",name:"풀무 장인",talk:"wshop"}]
+    npcs:[{id:"wshop",x:5,y:3,spr:"shopkeep",name:"풀무 장인",talk:"wshop"}]
   });
   MAPS.ishop=M("interior","짐보따리",[
     "`````````",
@@ -9095,10 +9106,10 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
   ],{
     start:[4,6],
     warps:[
-      {x:3,y:7,to:"town",tx:15,ty:10,dir:"down"},
-      {x:4,y:7,to:"town",tx:15,ty:10,dir:"down"}
+      {x:4,y:7,to:"town",tx:15,ty:10,dir:"down"},
+      {x:5,y:7,to:"town",tx:15,ty:10,dir:"down"}
     ],
-    npcs:[{id:"ishop",x:6,y:2,spr:"shopkeep",name:"보따리 아주머니",talk:"ishop"}]
+    npcs:[{id:"ishop",x:4,y:3,spr:"shopkeep",name:"보따리 아주머니",talk:"ishop"}]
   });
   MAPS.shrine=M("interior","종각",[
     "`````````",
@@ -9113,8 +9124,8 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
   ],{
     start:[4,6],
     warps:[
-      {x:3,y:7,to:"town",tx:15,ty:11,dir:"down"},
-      {x:4,y:7,to:"town",tx:15,ty:11,dir:"down"}
+      {x:4,y:7,to:"town",tx:15,ty:11,dir:"down"},
+      {x:5,y:7,to:"town",tx:15,ty:11,dir:"down"}
     ],
     npcs:[{id:"keeper",x:4,y:3,spr:"keeper",name:"종각지기",talk:"shrine"}]
   });
@@ -9167,7 +9178,7 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
   ensureCh2();
 
   ENEMIES.wisp={id:"wisp",name:"숨결안개",mon:"wisp",hp:16,atk:8,def:2,spd:11,xp:18,gold:10};
-  ENEMIES.echo={id:"echo",name:"닫힌여음",mon:"echo",hp:88,atk:12,def:6,spd:8,xp:70,gold:60,boss:true};
+  ENEMIES.echo={id:"echo",name:"닫힌여음",mon:"echo",hp:132,atk:13,def:6,spd:8,xp:70,gold:70,boss:true};
 
   SHOPS.mistinn={title:"이슬잠", list:["herb","herbL","mana"]};
 
@@ -9182,13 +9193,13 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
     "`T....KK...RHHH.HN.`",
     "`T....KK...cDcc.cc.`",
     "`T....cc..........T`",
-    "`T....cc...RR..RR.T`",
-    "`T....cc...HN..HN.T`",
-    "`T....cc...cc..cc.T`",
-    "`T................T`",
-    "`T....,...........T`",
-    "`T................T`",
-    "`T................T`",
+    "`T....cc..........T`",
+    "`T....cc..........T`",
+    "`T....cc..........T`",
+    "`T.......RRRR..RRRT`",
+    "`T....,..HHHH..HHHT`",
+    "`T.......HHHH..HHHT`",
+    "`T.......cccc..cc.T`",
     "`TTTT.ccc....T.TTTT`",
     "`TTTT.ccc....TTTTTT`",
     "`TTTT.ccc....TTTTTT`",
@@ -9268,18 +9279,20 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
   ];
 
   MAPS.mist=M("town","안개정", MIST_TILES, {
-    start:[10,16],
+    start:[10,18],
     warps:[
       {x:12,y:3,to:"pass",tx:8,ty:17,dir:"up"},
       {x:13,y:3,to:"pass",tx:8,ty:17,dir:"up"},
       {x:10,y:8,to:"mistinn",tx:5,ty:7,dir:"up"},
+      {x:11,y:8,to:"mistinn",tx:5,ty:7,dir:"up"},
+      {x:12,y:8,to:"mistinn",tx:5,ty:7,dir:"up"},
       {x:6,y:24,to:"world",tx:7,ty:3,dir:"down"},
       {x:7,y:24,to:"world",tx:7,ty:3,dir:"down"},
       {x:8,y:24,to:"world",tx:7,ty:3,dir:"down"}
     ],
     npcs:[
       {id:"boat",x:6,y:12,spr:"sailor",name:"뱃사공",talk:"boat"},
-      {id:"dusk",x:13,y:14,spr:"woman",name:"안개정 아낙",talk:"dusk"},
+      {id:"dusk",x:12,y:18,spr:"woman",name:"안개정 아낙",talk:"dusk"},
       {id:"kid2",x:8,y:15,spr:"kid",name:"아이",talk:"kid2"},
       {id:"watch",x:13,y:4,spr:"elder",name:"초소의 노인",talk:"watch"}
     ],
@@ -9309,7 +9322,7 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
       {x:8,y:18,to:"mist",tx:13,ty:4,dir:"down"},
       {x:9,y:18,to:"mist",tx:13,ty:4,dir:"down"}
     ],
-    chests:[{x:3,y:15,id:"p1",item:"herbL"}],
+    chests:[{x:3,y:15,id:"p1",item:"herbL",gold:40}],
     encounters:["moth","wisp","moth","beetle"],
     encRate:16
   });
@@ -9584,7 +9597,7 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
       startDialog([
         "성문이 낮게 열려 있다. 마당의 종들은 혀가 없는 것처럼 고요하다.",
         "달개: …여기다. 그날 저녁을 붙들어 둔 문 앞이다.",
-        "달개: 종은 고치는 물건이 아니오. 고친다고, 그 날이 돌아오는 것도 아니고.",
+        "달개: 종은 고치는 물건이 아니오. 고친다고 그날이 돌아오진 않소.",
         "솔이: 아래 마을 사람들은 이 저녁이 편하다더군.",
       "솔이: 해가 뜨면 오히려 불안하대.",
         "하늬: 그래도… 이 고요는, 여음이 아니야.",
@@ -9640,7 +9653,7 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
     if(kind==="watch"){
       startDialog([
         "초소의 노인: 성문은 열려 있되, 안쪽 문은 닫혀 있소.",
-        "초소의 노인: 마당의 작은 종 넷. 닫힌 소리를 하나씩 깨우면, 길이 숨을 고른다오.",
+        "초소의 노인: 마당의 작은 종 넷을 깨우면, 굳은 길이 숨을 고른다오.",
         "초소의 노인: 다만… 종루의 큰 종은, 아직 부르지 않는 편이 나을지도 모르오."
       ]);
       return;
@@ -10187,7 +10200,7 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
 
   ENEMIES.shade={id:"shade",name:"우물그늘",mon:"shade",hp:22,atk:9,def:3,spd:10,xp:22,gold:12};
   ENEMIES.plaque={id:"plaque",name:"무명패",mon:"plaque",hp:24,atk:10,def:4,spd:9,xp:24,gold:14};
-  ENEMIES.unname={id:"unname",name:"부르지못한이름",mon:"unname",hp:112,atk:14,def:7,spd:8,xp:90,gold:80,boss:true};
+  ENEMIES.unname={id:"unname",name:"부르지못한이름",mon:"unname",hp:152,atk:15,def:7,spd:8,xp:90,gold:95,boss:true};
 
   SHOPS.nameinn={title:"위패집", list:["herb","herbL","mana"]};
 
@@ -10230,7 +10243,7 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
       {x:8,y:3,to:"hall",tx:8,ty:21,dir:"up"},
       {x:9,y:3,to:"hall",tx:9,ty:21,dir:"up"}
     ],
-    chests:[{x:2,y:8,id:"w3",item:"herbL"}],
+    chests:[{x:2,y:8,id:"w3",item:"herbL",gold:60}],
     tablets:[
       {x:3,y:12,id:"dew",name:"이슬", also:[[4,12]]},
       {x:13,y:12,id:"star",name:"별", also:[[14,12]]},
@@ -10248,7 +10261,7 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
       {x:9,y:22,to:"well",tx:9,ty:5,dir:"down"}
     ],
     boss:{x:8,y:5,id:"unname"},
-    signs:[{x:9,y:15,text:"낡은 패에, 종을 ‘고친’ 기록이 아니라 ‘닫은’ 기록이 남아 있다.\n이름을 삼키고, 귀를 막은 날의 글씨다."}],
+    signs:[{x:9,y:15,text:"낡은 패엔 종을 ‘고친’ 게 아니라 ‘닫은’ 기록이 남아 있다.\n이름을 삼키고 귀를 막은 날의 글씨다."}],
     encounters:null,
     encRate:0
   });
@@ -10483,7 +10496,8 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
   talkSpecial=function(kind){
     if(kind==="wellkeep"){
       startDialog([
-        "우물지기: 이 우물은 잃어버린 말을 되돌려 보낸다고들 하지. 다만, 순서가 틀리면 메아리가 흐트러지오.",
+        "우물지기: 이 우물은 잃어버린 말을 되돌려 보낸다고들 하지.",
+        "우물지기: 다만 차례가 틀리면 메아리가 흐트러지니 조심하오.",
         "우물지기: 물결을 먼저 듣게. 들은 이름을, 들은 차례로 위패에 돌려 주게.",
         "우물지기: 아래 회랑에는… 종을 닫던 날의 글씨가 남아 있소."
       ]);
@@ -10514,7 +10528,7 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
     }
     if(kind==="nameinn"){
       startDialog([
-        "위패집 주인: 이름 없는 패를 맡아 두는 집이라오. 약초도 조금 있고, 잠자리도 있소.",
+        "위패집 주인: 이름 없는 패를 맡아 두는 집이라오. 약초와 잠자리도 있소.",
         "위패집 주인: 묵으시겠소, 아니면 물건을 보시겠소?"
       ], function(){
         st.mode="innAsk";
@@ -11043,7 +11057,7 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
 
   ENEMIES.longshade={id:"longshade",name:"긴그늘",mon:"longshade",hp:26,atk:11,def:4,spd:8,xp:26,gold:14};
   ENEMIES.falseecho={id:"falseecho",name:"헛여음",mon:"falseecho",hp:24,atk:10,def:3,spd:12,xp:24,gold:14};
-  ENEMIES.hushbell={id:"hushbell",name:"잠재운종",mon:"hushbell",hp:128,atk:16,def:8,spd:8,xp:110,gold:90,boss:true};
+  ENEMIES.hushbell={id:"hushbell",name:"잠재운종",mon:"hushbell",hp:158,atk:16,def:8,spd:8,xp:110,gold:115,boss:true};
 
   SHOPS.scribe={title:"기록실", list:["herb","herbL","mana"]};
 
@@ -11069,8 +11083,8 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
   MAPS.scribe=M("interior","기록실", SCRIBE_TILES, {
     start:[5,7],
     warps:[
-      {x:4,y:8,to:"inner",tx:14,ty:2,dir:"down"},
-      {x:5,y:8,to:"inner",tx:14,ty:2,dir:"down"}
+      {x:5,y:8,to:"inner",tx:14,ty:2,dir:"down"},
+      {x:6,y:8,to:"inner",tx:14,ty:2,dir:"down"}
     ],
     npcs:[{id:"scribe",x:8,y:4,spr:"shopkeep",name:"기록지기",talk:"scribe"}]
   });
@@ -11083,7 +11097,7 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
       {x:8,y:0,to:"ascent",tx:7,ty:16,dir:"up"},
       {x:9,y:0,to:"ascent",tx:8,ty:16,dir:"up"}
     ],
-    chests:[{x:5,y:16,id:"c4",item:"herbL"}],
+    chests:[{x:5,y:16,id:"c4",item:"herbL",gold:80}],
     bells:[
       {x:11,y:16,id:"cry",name:"외침"}
     ],
@@ -11354,15 +11368,15 @@ window.__UI7={sheet:"data:image/webp;base64,UklGRrYIAABXRUJQVlA4WAoAAAAQAAAAXwAA
   talkSpecial=function(kind){
     if(kind==="attendant"){
       startDialog([
-        "시종: 빈 복도만 남았지요. 사람들은 그날 이후로 종루 쪽을 닫아 두었습니다.",
-        "시종: 기록실에 그 날의 차례가 남아 있어요. 약초도 조금 있을 겁니다."
+        "시종: 빈 복도만 남았지요. 그날 이후로 종루 쪽은 닫아 두었습니다.",
+        "시종: 기록실에 그날의 차례가 남아 있어요. 약초도 조금 있을 겁니다."
       ]);
       return;
     }
     if(kind==="scribe"){
       startDialog([
-        "기록지기: 외침이 먼저였고, 끝 모를 종소리가 이어졌소. 마지막에야 종혀를 뺐지.",
-        "기록지기: 그 차례를 종루 길의 작은 종들이 아직 기억하고 있소. 약초를 보시겠소?"
+        "기록지기: 외침이 먼저였고 긴 종소리가 뒤따랐소. 끝에야 종혀를 뺐지.",
+        "기록지기: 종루 길의 작은 종들이 그 차례를 기억하오. 약초를 보시겠소?"
       ], function(){
         st.mode="innAsk";
         st.menu={kind:"scribeAsk", idx:0, opts:["물건을 본다","저장만 한다","그만둔다"]};
@@ -11968,7 +11982,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
 
   ENEMIES.lastfare={id:"lastfare", name:"남은인사", mon:"lastfare", hp:32, atk:13, def:5, spd:8, xp:32, gold:18};
   ENEMIES.namemist={id:"namemist", name:"이름안개", mon:"namemist", hp:30, atk:12, def:4, spd:9, xp:30, gold:16};
-  ENEMIES.swallowed={id:"swallowed", name:"삼킨그늘", mon:"swallowed", hp:168, atk:18, def:9, spd:9, xp:180, gold:120, boss:true};
+  ENEMIES.swallowed={id:"swallowed", name:"삼킨그늘", mon:"swallowed", hp:196, atk:18, def:9, spd:9, xp:180, gold:150, boss:true};
 
   SHOPS.keeper={title:"종곁방", list:["herb","herbL","mana"]};
 
@@ -11977,6 +11991,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     warps:[
       {x:6,y:1,to:"nave",tx:7,ty:16,dir:"up"},
       {x:7,y:1,to:"nave",tx:8,ty:16,dir:"up"},
+      {x:8,y:1,to:"nave",tx:8,ty:16,dir:"up"},
       {x:8,y:16,to:"spire",tx:7,ty:1,dir:"up"},
       {x:9,y:16,to:"spire",tx:8,ty:1,dir:"up"},
       {x:13,y:2,to:"keeper",tx:5,ty:7,dir:"up"},
@@ -12006,7 +12021,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
       {x:7,y:3,to:"gallery",tx:7,ty:16,dir:"up"},
       {x:8,y:3,to:"gallery",tx:8,ty:16,dir:"up"}
     ],
-    chests:[{x:3,y:10,id:"c5",item:"herbL"}],
+    chests:[{x:3,y:10,id:"c5",item:"herbL",gold:100}],
     tablets:[{x:12,y:10,id:"weep",name:"울음"}],
     encounters:["lastfare","namemist"],
     encRate:14
@@ -12243,7 +12258,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
       st.flags.ch5boss=true;
       st.mode="play";
       startDialog([
-        "삼킨그늘이 흩어진다. 큰 종이, 줄을 든 채로 남아 있다.",
+        "삼킨그늘이 흩어진다. 큰 종이, 줄을 내린 채로 남아 있다.",
         "하늬: …이제, 고를 차례야."
       ], function(){ openCh5Choice(); });
       return;
@@ -12338,7 +12353,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
   talkSpecial=function(kind){
     if(kind==="keeper"){
       startDialog([
-        "곁지기: 줄은 아직 종에 매여 있습니다. 울릴지, 그대로 둘지… 그건 종 앞에서 정하십시오.",
+        "곁지기: 줄은 아직 종에 매여 있습니다. 울릴지 둘지는 종 앞에서 정하십시오.",
         "곁지기: 약초를 보시겠습니까?"
       ], function(){
         st.mode="innAsk";
@@ -12391,7 +12406,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
             enterMap("peak", 7, 13);
             st.dir="up";
             st.mode="play";
-            startDialog(["큰 종이, 줄을 든 채로 남아 있다. 다시 고를 수 있다."], function(){ openCh5Choice(); });
+            startDialog(["큰 종이, 줄을 내린 채로 남아 있다. 다시 고를 수 있다."], function(){ openCh5Choice(); });
           });
         }
       }
@@ -12432,7 +12447,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     st.flags.ch5story=true;
     startDialog([
       "위패의 말이 발밑에서 낮게 이어진다.",
-      "하늬: …아직 고르지 않았어. 다만, 이 이름들을 모른 척할 수는 없을 것 같아."
+      "하늬: …아직 못 골랐어. 다만, 이 이름들을 모른 척할 순 없을 것 같아."
     ], function(){ saveGame(); });
   }
 
@@ -12527,7 +12542,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
       });
       if(st.battle && !st.battle._fareHint){
         st.battle._fareHint=true;
-        st.battle.msg="되울림이다. 인사가 거꾸로 되울린다. 들은 차례의 거꾸로를 눌러라.";
+        st.battle.msg="되울림이다. 인사가 거꾸로 되울린다. 들은 차례를 거꾸로 눌러라.";
       }
       return;
     }
@@ -13157,22 +13172,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
   window.__RPG.save=saveGame;
   window.__RPG.load=loadGame;
 
-  // Restore ch1 노을성 chests k1/k2 on the live (ch2) castle, without dropping n1/n2.
-  (function restoreCastleChests(){
-    const m=MAPS.castle;
-    if(!m) return;
-    m.chests=m.chests||[];
-    function has(id){ return m.chests.some(function(c){ return c && c.id===id; }); }
-    if(!has("k1")) m.chests.push({x:3,y:7,id:"k1",item:"herbL"});
-    if(!has("k2")) m.chests.push({x:12,y:7,id:"k2",gold:60});
-    function setC(x,y){
-      if(!m.tiles || !m.tiles[y] || x>=m.tiles[y].length) return;
-      const row=m.tiles[y];
-      if(row.charAt(x)==="C") return;
-      m.tiles[y]=row.slice(0,x)+"C"+row.slice(x+1);
-    }
-    setC(3,7); setC(12,7);
-  })();
+
 
   // 각 지역의 밤을 생활로 붙드는 주민. 기존 보행·초상 자산을 재사용한다.
   function addResident(mapId,npc){
@@ -13261,7 +13261,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
       const bx=7, by=11;
       const near=Math.abs(bx-st.x)+Math.abs(by-st.y)<=2 || (bx===fx&&by===fy) || (bx+1===fx&&by===fy);
       if(near){
-        startDialog(["큰 종이, 줄을 든 채로 남아 있다. 다시 고를 수 있다."], function(){
+        startDialog(["큰 종이, 줄을 내린 채로 남아 있다. 다시 고를 수 있다."], function(){
           if(typeof openCh5Choice==="function") openCh5Choice();
           else if(window.openCh5Choice) window.openCh5Choice();
         });
@@ -13566,7 +13566,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
         if(i===m.idx && typeof highlightBar==="function") highlightBar(16,y-2,160,16);
         text((i===m.idx?"▶ ":"  ")+o, 20, y, i===m.idx?gold():tx(), 11);
       });
-      text("B 돌아가기", 20, 62+n*18, dim(), 9);
+      text("B 돌아가기", 96, 62+n*18, dim(), 9, "center");
       return;
     }
     _dm();
@@ -13617,7 +13617,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
         return;
       }
       if(st.flags.sideNameDone){
-        startDialog(["돌지기: 빈 패를 아직 지니고 있구나. 그것으로 충분하오."]);
+        startDialog(["돌지기: 빈 패를 아직 지니고 있구려. 그것으로 충분하오."]);
         return;
       }
     }
@@ -13819,9 +13819,9 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     return null;
   }
   const TUT={
-    hold:"이 구슬은 길게 눌러야 한다. 등불에 닿을 때 누르고, 끝까지 손을 놓지 마라.",
-    dbl:"이 구슬은 두 번 눌러야 한다. 등불에 닿을 때 두 번 두드리세요.",
-    sync:"엇박이다. 조금 이른 숨에 맞춰라."
+    hold:"이 구슬은 길게 눌러야 해요. 등불에 닿을 때 누르고, 끝까지 손을 놓지 마세요.",
+    dbl:"이 구슬은 두 번 눌러야 해요. 등불에 닿을 때 두 번 두드리세요.",
+    sync:"엇박입니다. 조금 이른 숨에 맞추세요."
   };
   const TUTFLAG={hold:"tutHold",dbl:"tutDouble",sync:"tutSync"};
   function maybeTut(){
@@ -14404,7 +14404,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
           if(i===m.idx&&typeof highlightBar==="function") highlightBar(16,y-2,160,15);
           text((i===m.idx?"▶ ":"  ")+o, 20, y, i===m.idx?((typeof COL!=="undefined"&&COL.gold)||"#e8c86a"):((typeof COL!=="undefined"&&COL.tx)||"#f4efe0"), 10);
         });
-        text("A 시작  ·  B 돌아가기", 20, 64+n*17, (typeof COL!=="undefined"&&COL.dim)||"#b8c0d4", 8);
+        text("A 시작  ·  B 돌아가기", 96, 64+n*17, (typeof COL!=="undefined"&&COL.dim)||"#b8c0d4", 8, "center");
         return;
       }
       _dm2();
@@ -14641,7 +14641,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
   const GUARDS=[
     {id:"g1",map:"cave",x:1,y:8,foes:["beetle","rat"],charm:"dew"},
     {id:"g2",map:"pass",x:4,y:13,painted:1,foes:["wisp","moth"],charm:"wind"},
-    {id:"g3",map:"well",x:3,y:13,foes:["shade","plaque"],charm:"water"},
+    {id:"g3",map:"well",x:5,y:15,foes:["shade","plaque"],charm:"water"},
     {id:"g4",map:"climb",x:10,y:11,foes:["longshade","falseecho"],charm:"star"},
     {id:"g5",map:"nave",x:10,y:12,foes:["lastfare","namemist"],charm:"dawn"}
   ];
@@ -14694,10 +14694,12 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
   // 배경 그림에 이미 상자가 그려진 곳: 그림 위치(ax,ay 칸)로 연 상자를 맞추고, 그림 칸을 막고, 그 칸을 봐도 열리게 한다.
   const ART={
     "climb:c4":{ax:-1.05,ay:-0.48,sc:3.25,cells:[[4,15],[4,16]]},
-    "nave:c5":{ax:0.58,ay:-0.62,sc:2.5,cells:[[3,8],[3,9],[4,8],[4,9]]},
-    "castle:n1":{ax:0.15,ay:1.05,sc:1.42,fy:0.62,cells:[[3,4]]},
-    "castle:n2":{ax:-0.15,ay:1.05,sc:1.42,fy:0.62,cells:[[12,4]]}
+    "nave:c5":{ax:0.58,ay:-1.16,sc:3.15,fy:0.50,cells:[[3,8],[3,9],[4,8],[4,9]]},
+    "castle:n1":{ax:1.10,ay:1.18,sc:1.58,fy:0.62,cells:[[3,4]]},
+    "castle:n2":{ax:-1.10,ay:1.18,sc:1.58,fy:0.62,cells:[[12,4]]},
+    "well:w3":{ax:0.42,ay:-0.12,sc:2.2,fy:0.58,cells:[[2,8]]}
   };
+  const SIL_CACHE={};
   function mapKey(m){ if(m&&m.id) return m.id; let k=null; Object.keys(MAPS).forEach(function(id){ if(MAPS[id]===m) k=id; }); return k; }
   window.__x9art=function(m,x,y){
     const c=(m.chests||[]).find(function(q){ return q&&q.x===x&&q.y===y; });
@@ -14751,13 +14753,16 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     const k=open?1:0; if(GATEC[k]) return GATEC[k];
     const c=document.createElement("canvas"); c.width=80; c.height=112;
     const g=c.getContext("2d");
+    const amb=g.createRadialGradient(40,62,14,40,62,40);
+    amb.addColorStop(0,"rgba(18,10,24,0.65)"); amb.addColorStop(0.7,"rgba(24,14,32,0.42)"); amb.addColorStop(1,"rgba(24,14,32,0)");
+    g.fillStyle=amb; g.fillRect(0,0,80,112);
     function blob(x,y,rx,ry,col){ g.fillStyle=col; g.beginPath(); g.ellipse(x,y,rx,ry,0,0,Math.PI*2); g.fill(); }
     const stones=[
-      [40,22,14,7,"#3a2a34"],[28,30,8,8,"#4a3844"],[52,30,8,8,"#35242e"],
-      [24,48,7,10,"#3a2a32"],[56,48,7,10,"#4a3840"],
-      [24,68,7,10,"#2e2030"],[56,68,7,10,"#3c2c38"],
-      [26,86,8,8,"#4a3844"],[54,86,8,8,"#35242e"],
-      [32,24,6,5,"#5a4860"],[48,24,6,5,"#2a1c26"]
+      [40,22,14,7,"#2e2130"],[28,30,8,8,"#38293a"],[52,30,8,8,"#2b1e2c"],
+      [24,48,7,10,"#2f2232"],[56,48,7,10,"#362838"],
+      [24,68,7,10,"#261a2a"],[56,68,7,10,"#302232"],
+      [26,86,8,8,"#38293a"],[54,86,8,8,"#2a1d2b"],
+      [32,24,6,5,"#44344c"],[48,24,6,5,"#241724"]
     ];
     stones.forEach(function(r){ blob(r[0],r[1],r[2],r[3],r[4]); });
     // inner recess
@@ -14778,7 +14783,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
       g.strokeStyle="rgba(255,210,140,0.35)"; g.lineWidth=1.2; g.beginPath(); g.moveTo(51,36); g.quadraticCurveTo(53,56,51,96); g.stroke();
     }
     // threshold stones
-    blob(30,104,10,5,"#3a2a32"); blob(50,104,10,5,"#4a3844"); blob(40,106,8,4,"#2a1c24");
+    blob(30,104,10,5,"#2d202e"); blob(50,104,10,5,"#372939"); blob(40,106,8,4,"#221622");
     GATEC[k]=c; return c;
   }
   function drawCaveGate(span,cx,cy,TW,open){
@@ -14840,12 +14845,16 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     const prev=ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled=true;
     if(img&&img.naturalWidth){
-      // dark silhouette of the open chest covers the painted closed lid (no oval blob)
-      const off=document.createElement("canvas"); off.width=dw+10; off.height=dh+10;
-      const og=off.getContext("2d");
-      og.drawImage(img,5,5,dw,dh);
-      og.globalCompositeOperation="source-atop";
-      og.fillStyle="#1a1216"; og.fillRect(0,0,off.width,off.height);
+      const sk=dw+"x"+dh;
+      let off=SIL_CACHE[sk];
+      if(!off){
+        off=document.createElement("canvas"); off.width=dw+10; off.height=dh+10;
+        const og=off.getContext("2d");
+        og.drawImage(img,5,5,dw,dh);
+        og.globalCompositeOperation="source-atop";
+        og.fillStyle="#1a1216"; og.fillRect(0,0,off.width,off.height);
+        SIL_CACHE[sk]=off;
+      }
       ctx.drawImage(off, ox-5, oy-5);
       ctx.globalCompositeOperation="lighter";
       const fl=0.16+0.07*Math.sin((st.tick||0)*0.14);
@@ -14990,10 +14999,10 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
       dawn:["아이: 아침이 뭔지 이제 알아!","아이: 할머니가 할아버지 이름을 불렀어. 울면서 웃었어."],
       dusk:["아이: 오늘도 저녁이야. 나는 이게 좋아.","아이: 근데 등불 누나는 왜 자꾸 귀를 기울여?"]},
     sailor:{
-      mid:["뱃사람: 강물이 성 쪽으로 낮게 운다.","뱃사람: 물난리 뒤로 처음 듣는 소리야."],
-      late:["뱃사람: 그 해 물에 잃은 동무가 있지.","뱃사람: 이름을 말하면 배가 무거워질 것 같아 참았다."],
-      dawn:["뱃사람: 강이 제 빛으로 돌아왔어.","뱃사람: 동무 이름을 물에 대고 크게 불렀다. 이제 가볍다."],
-      dusk:["뱃사람: 강은 여전히 저녁빛이다.","뱃사람: 괜찮다. 이름은 내 가슴에 묶어 두마."]},
+      mid:["나룻배 아저씨: 강물이 성 쪽으로 낮게 운다.","나룻배 아저씨: 물난리 뒤로 처음 듣는 소리야."],
+      late:["나룻배 아저씨: 그 해 물에 잃은 동무가 있지.","나룻배 아저씨: 이름을 말하면 배가 무거워질 것 같아 참았다."],
+      dawn:["나룻배 아저씨: 강이 제 빛으로 돌아왔어.","나룻배 아저씨: 동무 이름을 물에 대고 크게 불렀다. 이제 가볍다."],
+      dusk:["나룻배 아저씨: 강은 여전히 저녁빛이다.","나룻배 아저씨: 괜찮다. 이름은 내 가슴에 묶어 두마."]},
     kid2:{
       dawn:["아이: 내 이름 생각났어! 큰 종이 불러 줬어.","솔이: …다행이다, 정말."],
       dusk:["아이: 이름은 아직 가물가물해.","아이: 그래도 저녁이 길어서 천천히 생각할래."]},
@@ -15053,7 +15062,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     if(f.ch3) return f.ch3gate?"낮은 회랑 안쪽으로 가자":"위패 차례를 풀자 ("+cnt(f.ch3names,3)+"/3)";
     if(f.ch2) return f.ch2gate?"노을성 종루로 올라가자":"작은 종을 깨우자 ("+cnt(f.ch2bells,4)+"/4)";
     if(!f.elder) return "북쪽 위 촌장의 집으로 가자";
-    if(!f.soli) return "동쪽 길로 나가 보자";
+    if(!f.soli) return st.mapId==="world"?"동쪽 길의 솔이를 만나자":"남쪽 들판으로 나가 보자";
     if(!f.gateOpen) return "굴의 등불을 켜자 ("+cnt(f.lamps,3)+"/3)";
     if(!f.shard) return "숨은굴에서 종혀 조각을 찾자";
     if(!f.dalgae) return "숨은굴 안쪽에서 달개를 만나자";
@@ -15224,7 +15233,7 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
     const motionOff=!!(window.__RPG&&window.__RPG.lessMotion&&window.__RPG.lessMotion());
     return ["글 속도  "+SPEEDS[SET.text], "음악  "+pips(SET.mus), "효과음  "+pips(SET.sfx),
       "쉬운 모드  "+(st.easy?"켬":"끔"), "흔들림  "+(motionOff?"끔":"켬"), "진동  "+(SET.vib?"켬":"끔"),
-      "기록 백업  내보내기·불러오기", "돌아가기"];
+      "기록 백업  코드 백업·복원", "돌아가기"];
   }
   function openSettings(idx){
     st.mode="menu";
@@ -15753,12 +15762,11 @@ window.__MON_EXTRA=window.__MON_EXTRA||{};
       const loadFailed=st.hasSave&&i===1&&st.titleLoadFailT>0&&((st.titleLoadFailT>>2)&1);
       text(o, 64, y, loadFailed?COL.hpHi:(i===st.titleIdx?GOLD():TX()), 11);
     });
-    rr(34, 196, 124, 12, "rgba(12,16,32,0.82)");
-    text("A · 시작 결정 · ↑↓ 선택", 96, 198, DIM(), 8, "center");
-    rr(30, 210, 132, 12, "rgba(12,16,32,0.82)");
-    text(st.easy?"쉬운 모드 켜짐 · 선택 끔":"쉬운 모드 · 선택으로 켜기", 96, 212, st.easy?GOLD():"#e2d2a4", 8, "center");
-    rr(38, 224, 116, 12, "rgba(12,16,32,0.82)");
-    text("1장 · 끝나지 않는 하루", 96, 226, "#b8a888", 8, "center");
+    rr(24, 193, 144, 46, "rgba(12,16,32,0.80)");
+    rr(24, 193, 144, 1, "rgba(232,200,106,0.28)");
+    text("A · 시작 결정 · ↑↓ 선택", 96, 197, DIM(), 8, "center");
+    text(st.easy?"쉬운 모드 켜짐 · 아래 '쉬움' 끔":"쉬운 모드 · 아래 '쉬움' 버튼", 96, 211, st.easy?GOLD():"#e2d2a4", 8, "center");
+    text("1장 · 끝나지 않는 하루", 96, 225, "#b8a888", 8, "center");
     if(st.titleLoadFailT>0){
       rr(34, 108, 124, 13, "rgba(12,16,32,0.88)");
       text("이어갈 수 없었다.", 96, 110, COL.hpHi, 8, "center");
@@ -15901,7 +15909,7 @@ cv.addEventListener("pointerup",endBeat);cv.addEventListener("pointercancel",end
     {n:2,name:"안개 너머의 성",lines:["안개정을 지나 노을성에 닿아","잠든 작은 종들을 깨웠다."],regs:["mist","pass","castle"]},
     {n:3,name:"불리지 못한 이름",lines:["메아리터의 빈 위패 앞에서","지워진 이름들을 다시 불렀다."],regs:["welltown","well"]},
     {n:4,name:"우리가 끈 종",lines:["내정과 종루 길을 오르며","그날 새벽의 일을 들었다."],regs:["inner"]},
-    {n:5,name:"새벽이냐, 저녁이냐",lines:["종루 꼭대기에서 그늘과 마주하고,","하늬는 하나의 길을 골랐다."],regs:["spire"]}
+    {n:5,name:"새벽이냐, 이슬이냐",lines:["종루 꼭대기에서 그늘과 마주하고,","하늬는 하나의 길을 골랐다."],regs:["spire"]}
   ];
   function x9(){ const x=X(); if(!x.beast) x.beast={}; if(!x.ach) x.ach={}; if(!x.ends) x.ends={}; if(!x.cards) x.cards={}; if(!x.wins) x.wins=0; if(!x.combo) x.combo=0; if(!x.rushBest) x.rushBest=0; return x; }
   function beastCount(){ const x=x9(); return BEAST.filter(function(r){ return x.beast[r[0]]>0; }).length; }
@@ -16008,7 +16016,7 @@ cv.addEventListener("pointerup",endBeat);cv.addEventListener("pointercancel",end
     const lead=st.party&&st.party[0];
     text("놀이 시간", 26, y, GOLD2(), 8); text(fmtPlay(x.play), 166, y, NUM(), 9, "right"); y+=14;
     if(lead){ text(lead.name+" 수준", 26, y, GOLD2(), 8); text(String(lead.lv), 166, y, NUM(), 9, "right"); }
-    text("A 계속", 96, 222, DIM(), 8, "center");
+    text("A 계속", 96, 219, DIM(), 8, "center");
     ctx.restore();
   }
 
@@ -16057,7 +16065,7 @@ cv.addEventListener("pointerup",endBeat);cv.addEventListener("pointercancel",end
     else { const c=CHAP[m.idx], done=chapDone(m.idx+1); head=done?c.name:"?"; lines=done?c.lines.slice():["이야기를 이어 가면 열린다."]; }
     text(head, 18, 212, GOLD(), 9);
     lines.forEach(function(l,i){ text(l, 18, 226+i*12, TX(), 9); });
-    text("◀▶ 쪽  ·  ▲▼ 고르기  ·  B 돌아가기", 96, 270, DIM(), 8, "center");
+    text("◀▶ 쪽  ·  ▲▼ 고르기  ·  B 돌아가기", 96, 263, DIM(), 8, "center");
   }
   function bookSR(m){
     const x=x9();
@@ -16088,7 +16096,7 @@ cv.addEventListener("pointerup",endBeat);cv.addEventListener("pointercancel",end
     const lm=1+0.06*Math.max(0,lv-12);
     (b.enemies||[]).forEach(function(e){
       e.maxHp=Math.round(Math.max(e.maxHp,(ref.hp||168)*(0.72+0.1*R.i))*lm); e.hp=e.maxHp;
-      e.atk=Math.round(Math.max(e.atk||1,(ref.atk||12)*(0.85+0.05*R.i))*(2.2+0.15*R.i));
+      e.atk=Math.round(12*(0.9+0.06*R.i)*(1.85+0.14*R.i));
       e.xp=Math.round((e.xp||0)*0.3); e.gold=Math.round((e.gold||0)*0.3);
     });
     b.msg="종소리 시험  "+(R.i+1)+" / "+RUSH.length;
@@ -16104,14 +16112,14 @@ cv.addEventListener("pointerup",endBeat);cv.addEventListener("pointercancel",end
       const first=!x.rushClear; x.rushClear=true;
       if(first) st.gold+=300;
       startDialog(["다섯 종소리를 모두 버텼다.", first?"종지기의 귀가 열린 듯하다. 골드 300을 받았다.":"이번에도 끝까지 들었다."]);
-    } else startDialog(["종소리 시험은 여기까지.", (reached+1)+"번째 종소리에서 멈췄다. 가장 멀리 간 곳: "+Math.max(1,x.rushBest)+" / "+RUSH.length]);
+    } else startDialog(["종소리 시험은 여기까지.", (reached===0?"첫 번째":(reached+1)+"번째")+" 종소리에서 멈췄다."+(x.rushBest>0?" 가장 멀리 간 곳: "+x.rushBest+" / "+RUSH.length:"")]);
   }
   const _fw9=finishWin;
   finishWin=function(){
     if(rushOn()){
       const R=st._rush;
       st.battle=null; st.mode="play";
-      (st.party||[]).forEach(function(p){ p.dead=false; p.hp=Math.min(p.maxHp,Math.max(p.hp,0)+Math.round(p.maxHp*0.25)); p.mp=Math.min(p.maxMp,(p.mp||0)+Math.round(p.maxMp*0.3)); });
+      (st.party||[]).forEach(function(p){ p.dead=false; p.hp=Math.min(p.maxHp,Math.max(p.hp,0)+Math.round(p.maxHp*0.35)); p.mp=Math.min(p.maxMp,(p.mp||0)+Math.round(p.maxMp*0.4)); });
       if(R.i>=RUSH.length-1){ endRush(true); return; }
       R.i++; R.wait=true; musicForMap();
       startDialog(["종소리 하나가 잦아들었다.  ("+R.i+" / "+RUSH.length+")","숨을 고른다. 다음 종소리가 다가온다."], function(){ nextRush(); });

@@ -1,4 +1,4 @@
-const CACHE="saebyeokjong-pwa-v11";
+const CACHE="saebyeokjong-pwa-v12";
 const ASSETS=["./","./index.html","./manifest.webmanifest","./favicon.ico","./icon-192.png","./icon-512.png","./apple-touch-icon.png"];
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting()));
